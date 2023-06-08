@@ -282,10 +282,9 @@ void main_setup()
 #endif /* BUILD_S100*/
 
 #ifdef BUILD_ATARI16BIT
-    theFuji.setup(&RS232);
-    RS232.setup();
-    RS232.addDevice(&theFuji,0x70);
-#endif
+    theFuji.setup(&ACSI);
+    ACSI.setup();
+#endif /* BUILD_ATRI16BIT */
 
 // Main high-priority service loop
 void fn_service_loop(void *param)

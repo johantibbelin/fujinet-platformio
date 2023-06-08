@@ -56,4 +56,9 @@
 #define SYSTEM_BUS H89Bus
 #endif
 
+#ifdef BUILD_ATARI16BIT
+#include "acsi/acsi.h"
+#define SYSTEM_BUS ACSI
+#endif
+
 #endif // BUS_H

@@ -44,5 +44,8 @@
 #ifdef BUILD_H89
 # include "h89/fuji.h"
 #endif
+#ifdef BUILD_ATARI16BIT
+#include "atari16bit/fuji.h"
+#endif /* ATARI_16BIT */
 
 #endif // DEVICE_FUJI_H
