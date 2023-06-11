@@ -142,4 +142,13 @@
     H89Modem *sioR;
 #endif
 
+#ifdef BUILD_ATARI16BIT
+#include "atari16bit/disk.h"
+#include "atari16bit/network.h"
+#include "atari16bit/modem.h"
+#include "atari16bit/printer.h"
+#include "atari16bit/printerlist.h"
+#include "atari16bit/fuji.h"
+#endif
+
 #endif // DEVICE_H
