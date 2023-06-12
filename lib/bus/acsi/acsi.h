@@ -8,25 +8,18 @@
 
 
 /* TODO: change to acsi command frame */
-union cmdFrame_t
+struct cmdFrame_t
 {
-    struct
-    {
-        uint8_t device;
-        uint8_t comnd;
-        uint8_t aux1;
-        uint8_t aux2;
-        uint8_t cksum;
-    };
-    struct
-    {
-        uint32_t commanddata;
-        uint8_t checksum;
-    } __attribute__((packed));
+    uint8_t devcmd;
+    uint8_t bladrhi;
+    uint8_t bladrmid;
+    uint8_t bladrlow;
+    uint8_t blcount;
+    uint8_t ctrlbyte;
 };
 
 // helper functions
-uint8_t sio_checksum(uint8_t *buf, unsigned short len);
+
 
 // class def'ns
 class modem;          // declare here so can reference it, but define in modem.h
