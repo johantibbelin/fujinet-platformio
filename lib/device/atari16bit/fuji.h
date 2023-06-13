@@ -51,7 +51,7 @@ struct appkey
     uint8_t reserved = 0;
 } __attribute__((packed));
 
-class rc2014Fuji : public virtualDevice
+class ACSIFuji : public virtualDevice
 {
 private:
     bool isReady = false;
@@ -63,7 +63,7 @@ private:
     uint8_t response[1024];
     uint16_t response_len;
 
-    systemBus *_rc2014_bus;
+    systemBus *_ACSI_bus;
 
     fujiHost _fnHosts[MAX_HOSTS];
 
@@ -71,7 +71,7 @@ private:
 
     int _current_open_directory_slot = -1;
 
-    rc2014Disk *_bootDisk; // special disk drive just for configuration
+    ACSIDisk *_bootDisk; // special disk drive just for configuration
 
     uint8_t bootMode = 0; // Boot mode 0 = CONFIG, 1 = MINI-BOOT
 
@@ -80,51 +80,47 @@ private:
     appkey _current_appkey;
 
 protected:
-    void rc2014_reset_fujinet();          // 0xFF
-    void rc2014_net_get_ssid();           // 0xFE
-    void rc2014_net_scan_networks();      // 0xFD
-    void rc2014_net_scan_result();        // 0xFC
-    void rc2014_net_set_ssid();           // 0xFB
-    void rc2014_net_get_wifi_status();    // 0xFA
-    void rc2014_mount_host();             // 0xF9
-    void rc2014_disk_image_mount();       // 0xF8
-    void rc2014_open_directory();         // 0xF7
-    void rc2014_read_directory_entry();   // 0xF6
-    void rc2014_close_directory();        // 0xF5
-    void rc2014_read_host_slots();        // 0xF4
-    void rc2014_write_host_slots();       // 0xF3
-    void rc2014_read_device_slots();      // 0xF2
-    void rc2014_write_device_slots();     // 0xF1
-    void rc2014_disk_image_umount();      // 0xE9
-    void rc2014_get_adapter_config();     // 0xE8
-    void rc2014_new_disk();               // 0xE7
-    void rc2014_unmount_host();           // 0xE6
-    void rc2014_get_directory_position(); // 0xE5
-    void rc2014_set_directory_position(); // 0xE4
-    void rc2014_set_hrc2014_index();      // 0xE3
-    void rc2014_set_device_filename();    // 0xE2
-    void rc2014_set_host_prefix();        // 0xE1
-    void rc2014_get_host_prefix();        // 0xE0
-    void rc2014_set_rc2014_external_clock(); // 0xDF
-    void rc2014_write_app_key();          // 0xDE
-    void rc2014_read_app_key();           // 0xDD
-    void rc2014_open_app_key();           // 0xDC
-    void rc2014_close_app_key();          // 0xDB
-    void rc2014_get_device_filename();    // 0xDA
-    void rc2014_set_boot_config();        // 0xD9
-    void rc2014_copy_file();              // 0xD8
-    void rc2014_set_boot_mode();          // 0xD6
-    void rc2014_enable_device();          // 0xD5
-    void rc2014_disable_device();         // 0xD4
-    void rc2014_device_enabled_status();  // 0xD1
+    void ACSI_reset_fujinet();          // 0xFF
+    void ACSI_net_get_ssid();           // 0xFE
+    void ACSI_net_scan_networks();      // 0xFD
+    void ACSI_net_scan_result();        // 0xFC
+    void ACSI_net_set_ssid();           // 0xFB
+    void ACSI_net_get_wifi_status();    // 0xFA
+    void ACSI_mount_host();             // 0xF9
+    void ACSI_disk_image_mount();       // 0xF8
+    void ACSI_open_directory();         // 0xF7
+    void ACSI_read_directory_entry();   // 0xF6
+    void ACSI_close_directory();        // 0xF5
+    void ACSI_read_host_slots();        // 0xF4
+    void ACSI_write_host_slots();       // 0xF3
+    void ACSI_read_device_slots();      // 0xF2
+    void ACSI_write_device_slots();     // 0xF1
+    void ACSI_disk_image_umount();      // 0xE9
+    void ACSI_get_adapter_config();     // 0xE8
+    void ACSI_new_disk();               // 0xE7
+    void ACSI_unmount_host();           // 0xE6
+    void ACSI_get_directory_position(); // 0xE5
+    void ACSI_set_directory_position(); // 0xE4
+    void ACSI_set_hACSI_index();      // 0xE3
+    void ACSI_set_device_filename();    // 0xE2
+    void ACSI_set_host_prefix();        // 0xE1
+    void ACSI_get_host_prefix();        // 0xE0
+    void ACSI_set_ACSI_external_clock(); // 0xDF
+    void ACSI_write_app_key();          // 0xDE
+    void ACSI_read_app_key();           // 0xDD
+    void ACSI_open_app_key();           // 0xDC
+    void ACSI_close_app_key();          // 0xDB
+    void ACSI_get_device_filename();    // 0xDA
+    void ACSI_set_boot_config();        // 0xD9
+    void ACSI_copy_file();              // 0xD8
+    void ACSI_set_boot_mode();          // 0xD6
+    void ACSI_enable_device();          // 0xD5
+    void ACSI_disable_device();         // 0xD4
+    void ACSI_device_enabled_status();  // 0xD1
 
-    void rc2014_test_command();
+    void ACSI_test_command();
 
-    void rc2014_control_status() override;
-    void rc2014_control_send();
-    void rc2014_control_clr();
-
-    void rc2014_process(uint32_t commanddata, uint8_t checksum) override;
+    void process(uint32_t commanddata, uint8_t checksum) override;
 
     void shutdown() override;
 
@@ -133,15 +129,15 @@ public:
     
     bool status_wait_enabled = true;
     
-    rc2014Disk *bootdisk();
+    ACSIDisk *bootdisk();
 
-    rc2014Network *network();
+    ACSINetwork *network();
 
     void debug_tape();
 
     void insert_boot_device(uint8_t d);
 
-    void setup(systemBus *rc2014bus);
+    void setup(systemBus *ACSIbus);
 
     void image_rotate();
     int get_disk_id(int drive_slot);
@@ -155,9 +151,9 @@ public:
 
     void mount_all();              // 0xD7
 
-    rc2014Fuji();
+    ACSIFuji();
 };
 
-extern rc2014Fuji theFuji;
+extern ACSIFuji theFuji;
 
 #endif // FUJI_H

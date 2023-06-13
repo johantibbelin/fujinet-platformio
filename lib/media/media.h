@@ -62,4 +62,8 @@
 #include "cx16/mediaType.h"
 #endif
 
+#ifdef BUILD_ATARI16BIT
+#include "atari16bit/mediaType.h"
+#include "atari16bit/mediaTypeIMG.h"
+#endif
 #endif // MEDIA_H
