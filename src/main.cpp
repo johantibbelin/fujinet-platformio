@@ -282,8 +282,9 @@ void main_setup()
 #endif /* BUILD_S100*/
 
 #ifdef BUILD_ATARI16BIT
-    theFuji.setup(&ACSI);
-    ACSI.setup();
+   extern ACSIFuji theFuji;
+   theFuji.setup(&ACSIBus);
+    ACSIBus.setup();
 #endif /* BUILD_ATRI16BIT */
 
 // Main high-priority service loop

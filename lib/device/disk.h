@@ -56,4 +56,9 @@
 # define DEVICE_TYPE H89Disk
 #endif 
 
+#ifdef BUILD_ATARI16BIT
+#include "atari16bit/disk.h"
+#define DEVICE_TYPE ACSIDisk
+#endif
+
 #endif // DEVICE_DISK_H
