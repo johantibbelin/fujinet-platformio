@@ -48,4 +48,8 @@
 #include "atari16bit/fuji.h"
 #endif /* ATARI_16BIT */
 
+#ifdef BUILD_COCO
+# include "drivewire/fuji.h"
+#endif 
+
 #endif // DEVICE_FUJI_H
