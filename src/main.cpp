@@ -5,6 +5,8 @@
 #endif
 
 #include "debug.h"
+#include "fuji.h"
+
 #include "bus.h"
 #include "device.h"
 #include "keys.h"
@@ -282,8 +284,7 @@ void main_setup()
 #endif /* BUILD_S100*/
 
 #ifdef BUILD_ATARI16BIT
-   extern ACSIFuji theFuji;
-   theFuji.setup(&ACSIBus);
+    theFuji.setup(&ACSIBus);
     ACSIBus.setup();
 #endif /* BUILD_ATRI16BIT */
 
