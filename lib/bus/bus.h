@@ -65,6 +65,7 @@
 #ifdef BUILD_ATARI16BIT
 #include "acsi/acsi.h"
 #define SYSTEM_BUS ACSIBus
+#endif
 
 #ifdef BUILD_COCO
 #include "drivewire/drivewire.h"
