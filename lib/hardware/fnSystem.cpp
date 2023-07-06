@@ -29,8 +29,8 @@
 
 #include "bus.h"
 
+#include "fsFlash.h"
 #include "fnFsSD.h"
-#include "fnFsSPIFFS.h"
 #include "fnWiFi.h"
 
 #ifdef BUILD_APPLE
@@ -401,18 +401,18 @@ void SystemManager::delete_tempfile(FileSystem *fs, const char *filename)
 
 /*
  Remove specified temporary file, if fnSDFAT available, then file is deleted there,
- otherwise deleted from SPIFFS
+ otherwise deleted from FLASH
 */
 void SystemManager::delete_tempfile(const char *filename)
 {
     if (fnSDFAT.running())
         delete_tempfile(&fnSDFAT, filename);
     else
-        delete_tempfile(&fnSPIFFS, filename);
+        delete_tempfile(&fsFlash, filename);
 }
 
 /*
- Create temporary file. fnSDFAT will be used if available, otherwise fnSPIFFS.
+ Create temporary file. fnSDFAT will be used if available, otherwise fsFlash.
  Filename will be 8 characters long. If provided, generated filename will be placed in result_filename
  File opened in "w+" mode.
 */
@@ -421,7 +421,7 @@ FILE *SystemManager::make_tempfile(char *result_filename)
     if (fnSDFAT.running())
         return make_tempfile(&fnSDFAT, result_filename);
     else
-        return make_tempfile(&fnSPIFFS, result_filename);
+        return make_tempfile(&fsFlash, result_filename);
 }
 
 // Copy file from source filesystem/filename to destination filesystem/name using optional buffer_hint for buffer size
@@ -533,13 +533,13 @@ int SystemManager::load_firmware(const char *filename, uint8_t **buffer)
 {
     Debug_printf("load_firmware '%s'\r\n", filename);
 
-    if (fnSPIFFS.exists(filename) == false)
+    if (fsFlash.exists(filename) == false)
     {
         Debug_println("load_firmware FILE NOT FOUND");
         return -1;
     }
 
-    FILE *f = fnSPIFFS.file_open(filename);
+    FILE *f = fsFlash.file_open(filename);
     size_t file_size = FileSystem::filesize(f);
 
     Debug_printf("load_firmware file size = %u\r\n", file_size);
@@ -657,20 +657,7 @@ void SystemManager::check_hardware_ver()
 #endif
 
 #ifdef PINMAP_A2_REV0
-    int spifixupcheck, spifixdowncheck, ledstripupcheck, ledstripdowncheck, rev1upcheck, rev1downcheck;
-
-    /* Check for LED Strip pullup and enable it if found */
-    fnSystem.set_pin_mode(LED_DATA_PIN, gpio_mode_t::GPIO_MODE_INPUT, SystemManager::pull_updown_t::PULL_UP);
-    ledstripupcheck = fnSystem.digital_read(LED_DATA_PIN);
-    fnSystem.set_pin_mode(LED_DATA_PIN, gpio_mode_t::GPIO_MODE_INPUT, SystemManager::pull_updown_t::PULL_DOWN);
-    ledstripdowncheck = fnSystem.digital_read(LED_DATA_PIN);
-
-    // DISABLED LED Strip for A2
-    if(ledstripdowncheck == ledstripupcheck)
-    {
-        //ledstrip_found = true;
-        //Debug_printf("Enabling LED Strip\r\n");
-    }
+    int spifixupcheck, spifixdowncheck, rev1upcheck, rev1downcheck;
 
 #ifndef MASTERIES_SPI_FIX
 #   ifdef REV1DETECT
