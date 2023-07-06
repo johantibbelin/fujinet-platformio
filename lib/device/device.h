@@ -158,4 +158,14 @@
     H89Modem *sioR;
 #endif
 
+#ifdef BUILD_ATARI16BIT
+# include "acsi/disk.h"
+# include "acsi/network.h"
+# include "acsi/modem.h"
+# include "acsi/printer.h"
+# include "acsi/printerlist.h"
+# include "acsi/fuji.h"
+    ACSIModem *sioR;
+#endif
+
 #endif // DEVICE_H

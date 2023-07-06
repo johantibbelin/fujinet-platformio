@@ -51,6 +51,11 @@
 # include "h89/mediaTypeIMG.h"
 #endif
 
+#ifdef BUILD_ATARI16BIT
+#include "atari16bit/mediaType.h"
+#include "atari16bit/mediaTypeIMG.h"
+#endif
+
 #ifdef BUILD_COCO
 # include "new/mediaType.h"
 # include "new/mediaTypeDDP.h"

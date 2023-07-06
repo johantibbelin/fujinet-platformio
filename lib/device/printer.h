@@ -49,6 +49,12 @@
 # define PRINTER_CLASS H89Printer
 #endif
 
+#ifdef BUILD_ATARI16BIT
+# include "acsi/printer.h"
+# include "acsi/printerlist.h"
+# define PRINTER_CLASS ACSIPrinter
+#endif
+
 #ifdef BUILD_COCO
 # include "drivewire/printer.h"
 # include "drivewire/printerlist.h"
