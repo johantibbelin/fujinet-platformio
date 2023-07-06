@@ -370,6 +370,27 @@ void main_setup(int argc, char *argv[])
 
 #endif
 
+#ifdef BUILD_ATARI16BIT
+    theFuji.setup(&ACSI);
+    ACSI.setup();
+
+   FileSystem *ptrfs = fnSDFAT.running() ? (FileSystem *)&fnSDFAT : (FileSystem *)&fsFlash;
+    ACSIPrinter::printer_type ptype = Config.get_printer_type(0);
+    if (ptype == ACSIPrinter::printer_type::PRINTER_INVALID)
+        ptype = ACSIPrinter::printer_type::PRINTER_FILE_TRIM;
+
+    Debug_printf("Creating a default printer using %s storage and type %d\r\n", ptrfs->typestring(), ptype);
+
+    ACSIPrinter *ptr = new ACSIPrinter(ptrfs, ptype);
+    fnPrinters.set_entry(0, ptr, ptype, Config.get_printer_port(0));
+    
+    ACSI.addDevice(ptr, ACSI_DEVICEID_PRINTER + fnPrinters.get_port(0)); // P:
+
+    // H89R = new H89Modem(ptrfs, Config.get_modem_sniffer_enabled()); // Config/User selected sniffer enable
+    // H89Bus.addDevice(H89R, H89_DEVICEID_MODEM); // R:
+    
+#endif /* Atari 16bit */
+
 #ifdef BUILD_ADAM
     theFuji.setup(&AdamNet);
     AdamNet.setup();
