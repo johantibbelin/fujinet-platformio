@@ -1,0 +1,57 @@
+;------------------------------------------------------
+; ACSI implementation in PIO
+; (for use with Fujinet)
+;------------------------------------------------------
+; Written by Johan Tibbelin (sjfroos)
+;
+
+; ACSI ID to look for
+.define ID 3 
+
+;GPIO pins for control signals
+.define IRQ 3
+.define CS 2
+.define A1 27
+.define ACK 26
+
+.program acsi_cmd
+; Program waits for A1 and CS LOW then throws interrupt
+
+;Sideset is used for _IRQ signal
+;.side_set 1
+
+start:
+    
+    wait 0 gpio A1
+    wait 0 gpio CS [4]
+    in pins,8
+    irq wait 1
+    jmp start
+    
+
+.program acsi_dma_in
+
+.side_set 1
+
+start_dma_in:
+
+pull 8
+out osr,8 side 0 [5]
+wait 0 gpio ACK
+nop side 1 [5]
+jmp start_dma_in
+
+%c-sdk {
+
+static inline void acsi_cmd_program_init(PIO pio, uint sm, uint offset, uint pin, uint nr_pins) {
+  // 1. Define a config object
+  pio_sm_config config = hello_program_get_default_config(offset);
+
+  // 2. Set and initialize the output pins
+  sm_config_set_set_pins(&config, pin, 1);
+  
+  // 3. Apply the configuration & activate the State Machine
+  pio_sm_init(pio, sm, offset, &config);
+  pio_sm_set_enabled(pio, sm, true);
+}
+%}
