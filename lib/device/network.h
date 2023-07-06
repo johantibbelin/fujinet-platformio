@@ -37,6 +37,10 @@
 # include "h89/network.h"
 #endif
 
+#ifdef BUILD_ATARI16BIT
+# include "acsi/network.h"
+#endif
+
 #ifdef BUILD_COCO
 # include "drivewire/network.h"
 #endif

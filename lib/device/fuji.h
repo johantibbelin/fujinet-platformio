@@ -49,6 +49,10 @@
 # include "h89/fuji.h"
 #endif
 
+#ifdef BUILD_ATARI16BIT
+#include "acsi/fuji.h"
+#endif
+
 #ifdef BUILD_COCO
 # include "drivewire/fuji.h"
 #endif 
