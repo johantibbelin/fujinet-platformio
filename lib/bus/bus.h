@@ -63,6 +63,11 @@
 #define SYSTEM_BUS H89Bus
 #endif
 
+#ifdef BUILD_ATARI16BIT
+#include "acsi/acsi.h"
+#define SYSTEM_BUS ACSI
+#endif
+
 #ifdef BUILD_COCO
 #include "drivewire/drivewire.h"
 #define SYSTEM_BUS DRIVEWIRE

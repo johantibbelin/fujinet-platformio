@@ -63,6 +63,11 @@
 # define DEVICE_TYPE H89Disk
 #endif 
 
+#ifdef BUILD_ATARI16BIT
+# include "acsi/disk.h"
+# define DEVICE_TYPE ACSIDisk
+#endif 
+
 #ifdef BUILD_COCO
 # include "drivewire/disk.h"
 # define DEVICE_TYPE drivewireDisk
