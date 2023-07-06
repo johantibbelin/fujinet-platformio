@@ -34,6 +34,6 @@
 #define PIN_DEBUG		PIN_IEC_SRQ
 #endif
 
+#include "pinmap/atari16bit_rev0.h"
 #endif // ESP_PLATFORM
-
 #endif /* PINMAP_H */
