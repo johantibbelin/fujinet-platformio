@@ -1,4 +1,4 @@
-#ifdef BUILD_ACSI
+#ifdef BUILD_ATARI16BIT
 
 #include "bus.h"
 #include "modem.h"
@@ -76,7 +76,7 @@ void ACSIModem::telnet_event_handler(telnet_t *telnet, telnet_event_t *ev)
 
 static void _telnet_event_handler(telnet_t *telnet, telnet_event_t *ev, void *user_data)
 {
-    H89Modem *modem = (H89Modem *)user_data; // somehow it thinks this is unused?
+    ACSIModem *modem = (ACSIModem *)user_data; // somehow it thinks this is unused?
 
     modem->telnet_event_handler(telnet, ev);    
 }

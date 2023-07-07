@@ -1,4 +1,4 @@
-#ifdef BUILD_H89
+#ifdef BUILD_ATARI16BIT
 
 /**
  * N: Firmware

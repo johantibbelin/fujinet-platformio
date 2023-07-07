@@ -1,4 +1,4 @@
-#ifdef BUILD_ACSI
+#ifdef BUILD_ATARI16BIT
 
 #include "printerlist.h"
 
