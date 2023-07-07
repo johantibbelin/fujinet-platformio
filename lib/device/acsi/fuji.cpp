@@ -1,4 +1,4 @@
-#ifdef BUILD_H89
+#ifdef BUILD_ATARI16BIT
 
 #include "fuji.h"
 
@@ -169,7 +169,7 @@ void ACSIFuji::debug_tape()
 }
 
 // Disk Image Unmount
-void ACSIFuji::H89_disk_image_umount()
+void ACSIFuji::ACSI_disk_image_umount()
 {
 }
 
@@ -293,7 +293,7 @@ void ACSIFuji::ACSI_device_enabled_status()
 // Initializes base settings and adds our devices to the SIO bus
 void ACSIFuji::setup(systemBus *_bus)
 {
-    _H89_bus = _bus;
+    _ACSI_bus = _bus;
 
     _populate_slots_from_config();
 
