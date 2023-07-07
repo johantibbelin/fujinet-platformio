@@ -14,8 +14,8 @@
 #define PIN_UART0_TX 1  // USB Serial
 #define PIN_UART1_RX 26 // Debug Pico
 #define PIN_UART1_TX 25 // Debug Pico
-//#define PIN_UART2_RX 33
-//#define PIN_UART2_TX 21
+#define PIN_UART2_RX 33
+#define PIN_UART2_TX 21
 
 /* Buttons - keys.cpp */
 #define PIN_BUTTON_A 0  // Button 0 on DEVKITC-VE
