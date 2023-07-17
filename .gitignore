@@ -31,3 +31,8 @@ test/rmt_nec_example.cpp
 test/rmt_tx_example.cpp
 dependencies.lock
 platformio_old.ini
+
+
+# Ignore packed firmware files
+firmware/*
+
