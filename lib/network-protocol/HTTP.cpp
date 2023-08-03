@@ -182,6 +182,7 @@ bool NetworkProtocolHTTP::open_dir_handle()
     {
         Debug_printf("Expected %u bytes, actually got %u bytes.\r\n", len, actual_len);
         error = NETWORK_ERROR_GENERAL;
+        free(buf);        
         return true;
     }
 
@@ -190,6 +191,7 @@ bool NetworkProtocolHTTP::open_dir_handle()
     {
         Debug_printf("Could not parse buffer, returning 144\r\n");
         error = NETWORK_ERROR_GENERAL;
+        free(buf);
         return true;
     }
 
@@ -204,6 +206,7 @@ bool NetworkProtocolHTTP::open_dir_handle()
     }
 
     // Directory parsed, ready to be returned by read_dir_entry()
+    free(buf);
     return false;
 }
 
@@ -397,7 +400,7 @@ bool NetworkProtocolHTTP::read_dir_entry(char *buf, unsigned short len)
     {
         fileSize = atoi(dirEntryCursor->fileSize.c_str());
         strcpy(buf, dirEntryCursor->filename.c_str());
-        dirEntryCursor++;
+        ++dirEntryCursor;
     }
     else
     {
@@ -459,8 +462,6 @@ bool NetworkProtocolHTTP::write_file_handle_get_header(uint8_t *buf, unsigned sh
     if (httpOpenMode == GET)
     {
         char *requestedHeader = (char *)malloc(len);
-
-        memset(requestedHeader, 0, len);
 
         if (requestedHeader == nullptr)
         {

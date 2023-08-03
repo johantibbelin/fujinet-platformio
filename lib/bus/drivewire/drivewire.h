@@ -1,4 +1,8 @@
 //
+// http://www.boisypitre.com/retrocomputing/drivewire/
+// https://www.frontiernet.net/~mmarlette/Cloud-9/Hardware/DriveWire3.html
+// https://www.cocopedia.com/wiki/index.php/DRIVEWIRE.ZIP
+//
 // https://sourceforge.net/projects/drivewireserver/
 // https://github.com/qbancoffee/drivewire4
 // https://github.com/n6il/toolshed/tree/master/hdbdos
@@ -8,6 +12,8 @@
 // https://www.cocopedia.com/wiki/index.php/Main_Page
 // https://github.com/qbancoffee/coco_motherboards
 // https://archive.worldofdragon.org/index.php?title=Main_Page
+// https://sites.google.com/site/dabarnstudio/drivewire-4-3-4e
+// https://sites.google.com/site/dabarnstudio/coco-midi-drivewire
 //
 
 #ifndef COCO_H
@@ -182,7 +188,7 @@ private:
     /**
      * @brief Current Baud Rate
      */
-    int _drivewireBaud;
+    int _drivewireBaud = 0;
 
 
     // int readSector(struct dwTransferData *dp);
