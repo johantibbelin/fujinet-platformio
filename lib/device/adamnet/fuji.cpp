@@ -21,6 +21,7 @@
 
 adamFuji theFuji;        // global fuji device object
 adamNetwork *theNetwork; // global network device object (temporary)
+adamNetwork *theNetwork2; // another network device
 adamPrinter *thePrinter; // global printer
 adamSerial *theSerial;   // global serial
 
@@ -283,6 +284,9 @@ void adamFuji::adamnet_disk_image_mount()
 
     adamnet_recv(); // CK
 
+    AdamNet.start_time = esp_timer_get_time();
+    adamnet_response_ack();
+
     // TODO: Implement FETCH?
     char flag[3] = {'r', 0, 0};
     if (options == DISK_ACCESS_MODE_WRITE)
@@ -295,8 +299,7 @@ void adamFuji::adamnet_disk_image_mount()
     Debug_printf("Selecting '%s' from host #%u as %s on D%u:\n",
                  disk.filename, disk.host_slot, flag, deviceSlot + 1);
 
-    AdamNet.start_time = esp_timer_get_time();
-    adamnet_response_ack();
+    disk.disk_dev.host = &host;
 
     disk.fileh = host.file_open(disk.filename, disk.filename, sizeof(disk.filename), flag);
 
@@ -521,30 +524,34 @@ void adamFuji::adamnet_disk_image_umount()
 */
 void adamFuji::image_rotate()
 {
-    Debug_println("Fuji cmd: IMAGE ROTATE");
+    // Debug_println("Fuji cmd: IMAGE ROTATE");
 
-    int count = 0;
-    // Find the first empty slot
-    while (_fnDisks[count].fileh != nullptr)
-        count++;
+    // int count = 0;
+    // // Find the first empty slot, stop at 8 so we don't catch the cassette
+    // while (_fnDisks[count].fileh != nullptr && count < 8)
+    //     count++;
 
-    if (count > 1)
-    {
-        count--;
+    // if (count > 1)
+    // {
+    //     count--;
 
-        // Save the device ID of the disk in the last slot
-        int last_id = _fnDisks[count].disk_dev.id();
+    //     for (int n = count; n > 0; n--)
+    //         AdamNet.remDevice(_fnDisks[n].disk_dev.id());
 
-        for (int n = count; n > 0; n--)
-        {
-            int swap = _fnDisks[n - 1].disk_dev.id();
-            Debug_printf("setting slot %d to ID %hx\n", n, swap);
-            _adamnet_bus->changeDeviceId(&_fnDisks[n].disk_dev, swap);
-        }
+    //     // Save the device ID of the disk in the last slot
+    //     int last_id = _fnDisks[count].disk_dev.id();
 
-        // The first slot gets the device ID of the last slot
-        _adamnet_bus->changeDeviceId(&_fnDisks[0].disk_dev, last_id);
-    }
+    //     for (int n = count; n > 0; n--)
+    //     {
+    //         int swap = _fnDisks[n - 1].disk_dev.id();
+    //         Debug_printf("setting slot %d to ID %hx\n", n, swap);
+    //         AdamNet.addDevice(&_fnDisks[n].disk_dev,swap);
+    //     }
+
+    //     // The first slot gets the device ID of the last slot
+    //     Debug_printf("setting slot %d to ID %hx\n", 0, last_id);
+    //     AdamNet.addDevice(&_fnDisks[0].disk_dev, last_id);
+    // }
 }
 
 // This gets called when we're about to shutdown/reboot
@@ -1215,8 +1222,10 @@ void adamFuji::setup(systemBus *siobus)
     }
 
     theNetwork = new adamNetwork();
+    theNetwork2 = new adamNetwork();
     theSerial = new adamSerial();
     _adamnet_bus->addDevice(theNetwork, 0x09); // temporary.
+    _adamnet_bus->addDevice(theNetwork2,0x0A); // temporary
     _adamnet_bus->addDevice(&theFuji, 0x0F);   // Fuji becomes the gateway device.
 }
 

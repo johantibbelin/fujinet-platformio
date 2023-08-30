@@ -10,6 +10,7 @@
 #include "fnSystem.h"
 #include "led.h"
 #include <cstring>
+#include "fuji.h"
 
 #define IDLE_TIME 180 // Idle tolerance in microseconds
 
@@ -287,10 +288,24 @@ void systemBus::_adamnet_process_cmd()
 
 void systemBus::_adamnet_process_queue()
 {
+    adamnet_message_t msg;
+    if (xQueueReceive(qAdamNetMessages, &msg, 0) == pdTRUE)
+    {
+        switch (msg.message_id)
+        {
+        case ADAMNETMSG_DISKSWAP:
+            if (_fujiDev != nullptr)
+                _fujiDev->image_rotate();
+            break;
+        }
+    }
 }
 
 void systemBus::service()
 {
+    // process queue messages (disk swap)
+    _adamnet_process_queue();
+
     // Process anything waiting.
     if (fnUartBUS.available() > 0)
         _adamnet_process_cmd();
@@ -302,6 +317,9 @@ void systemBus::setup()
 
     // Set up interrupt for RESET line
     reset_evt_queue = xQueueCreate(10, sizeof(uint32_t));
+    // Set up event queue
+    qAdamNetMessages = xQueueCreate(4, sizeof(adamnet_message_t));
+
     // Start card detect task
     xTaskCreate(adamnet_reset_intr_task, "adamnet_reset_intr_task", 2048, this, 10, NULL);
     // Enable interrupt for card detection

@@ -368,9 +368,8 @@ void rc2014Network::rc2014_set_json_query()
             in[i] = 0x00;
     }
 
-    inp = strrchr((const char *)in, ':');
+    inp = (const char *)in;
     Debug_printf("#1 %s\n",inp);
-    inp++;
     json.setReadQuery(string(inp),cmdFrame.aux2);
     json_bytes_remaining = json.readValueLen();
     tmp = (uint8_t *)malloc(json.readValueLen());
@@ -653,7 +652,7 @@ void rc2014Network::create_devicespec(string d)
 */
 void rc2014Network::create_url_parser()
 {
-    std::string url = deviceSpec.substr(deviceSpec.find(":") + 1);
+    std::string url = deviceSpec;
     urlParser = EdUrlParser::parseUrl(url);
 }
 
