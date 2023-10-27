@@ -266,8 +266,8 @@ void iwmFuji::iwm_ctrl_copy_file()
     unsigned char sourceSlot;
     unsigned char destSlot;
 
-    sourceSlot = data_buffer[0]; // adamnet_recv();
-    destSlot = data_buffer[0]; //adamnet_recv();
+    sourceSlot = data_buffer[0];
+    destSlot = data_buffer[1];
     copySpec = std::string((char *)&data_buffer[2]);
     Debug_printf("copySpec: %s\n", copySpec.c_str());
 
@@ -1105,7 +1105,7 @@ void iwmFuji::setup(iwmBus *iwmbus)
 
 int iwmFuji::get_disk_id(int drive_slot)
 {
-    return -1;
+    return 0;
 }
 std::string iwmFuji::get_host_prefix(int host_slot)
 {
