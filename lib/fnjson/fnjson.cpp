@@ -101,7 +101,7 @@ string FNJSON::processString(string in)
     }
 
 #ifdef BUILD_IEC
-    mstr::toPETSCII(in);
+    in = mstr::toPETSCII2(in);
 #endif
 
 #ifdef BUILD_ATARI
@@ -155,6 +155,8 @@ string FNJSON::getValue(cJSON *item)
         Debug_printf("\r\nFNJSON::getValue called with null item, returning empty string.\r\n");
         return string("");
     }
+    // Fix where the print cursor is.
+    Debug_printf("\r\n");
 
     stringstream ss;
 
@@ -212,14 +214,13 @@ string FNJSON::getValue(cJSON *item)
             item = item->child;
             do
             {
-                #ifdef BUILD_IEC
-                    // Convert key to PETSCII
-                    string tempStr = string((const char *)item->string);
-                    mstr::toPETSCII(tempStr);
-                    ss << tempStr;
-                #else
+                // #ifdef BUILD_IEC
+                //     // Convert key to PETSCII
+                //     string tempStr = string((const char *)item->string);
+                //     ss << mstr::toPETSCII2(tempStr);
+                // #else
                     ss << item->string;
-                #endif
+                // #endif
 
                 ss << lineEnding + getValue(item);
             } while ((item = item->next) != NULL);
