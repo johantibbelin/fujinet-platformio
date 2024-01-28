@@ -118,7 +118,7 @@ void iecNetwork::iec_open()
         protocol[commanddata.channel] = nullptr;
     }
 
-    urlParser[commanddata.channel] = EdUrlParser::parseUrl(deviceSpec[commanddata.channel]);
+    urlParser[commanddata.channel] = PeoplesUrlParser::parseURL(deviceSpec[commanddata.channel]);
 
     // This is unbelievably stupid, but here we are.
     for (int i = 0; i < urlParser[commanddata.channel]->query.size(); i++)
@@ -1146,7 +1146,7 @@ void iecNetwork::set_prefix()
 
     if (prefixSpec_str == "..") // Devance path N:..
     {
-        vector<int> pathLocations;
+        std::vector<int> pathLocations;
         for (int i = 0; i < prefix[channel].size(); i++)
         {
             if (prefix[channel][i] == '/')
@@ -1273,6 +1273,8 @@ device_state_t iecNetwork::process()
     //payload=mstr::toUTF8(payload); // @idolpx? What should I do instead?
 
     Debug_printv("payload[%s]", payload.c_str());
+    std::string hex = mstr::toHex(payload);
+    Debug_printv("hex[%s]", hex.c_str());
 
     // fan out to appropriate process routine
     switch (commanddata.channel)

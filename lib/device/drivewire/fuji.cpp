@@ -17,7 +17,7 @@
 #include "led.h"
 #include "utils.h"
 
-#define ADDITIONAL_DETAILS_BYTES 10
+#define ADDITIONAL_DETAILS_BYTES 13
 
 drivewireFuji theFuji; // global fuji device object
 
@@ -798,7 +798,7 @@ void _set_additional_direntry_details(fsdir_entry_t *f, uint8_t *dest, uint8_t m
     // File modified date-time
     struct tm *modtime = localtime(&f->modified_time);
     modtime->tm_mon++;
-    modtime->tm_year -= 70;
+    modtime->tm_year -= 100;
 
     dest[0] = modtime->tm_year;
     dest[1] = modtime->tm_mon;
@@ -808,34 +808,43 @@ void _set_additional_direntry_details(fsdir_entry_t *f, uint8_t *dest, uint8_t m
     dest[5] = modtime->tm_sec;
 
     // File size
-    uint16_t fsize = f->size;
-    dest[6] = HIBYTE_FROM_UINT16(fsize);
-    dest[7] = LOBYTE_FROM_UINT16(fsize);
+    uint32_t fsize = f->size;
+    dest[6] = (fsize >> 24) & 0xFF;
+    dest[7] = (fsize >> 16) & 0xFF;
+    dest[8] = (fsize >> 8) & 0xFF;
+    dest[9] = fsize & 0xFF;
 
     // File flags
 #define FF_DIR 0x01
 #define FF_TRUNC 0x02
 
-    dest[8] = f->isDir ? FF_DIR : 0;
+    dest[10] = f->isDir ? FF_DIR : 0;
 
-    maxlen -= 10; // Adjust the max return value with the number of additional bytes we're copying
-    if (f->isDir) // Also subtract a byte for a terminating slash on directories
+    maxlen -= ADDITIONAL_DETAILS_BYTES; // Adjust the max return value with the number of additional bytes we're copying
+    if (f->isDir)                       // Also subtract a byte for a terminating slash on directories
         maxlen--;
     if (strlen(f->filename) >= maxlen)
-        dest[8] |= FF_TRUNC;
+        dest[11] |= FF_TRUNC;
 
     // File type
-    dest[9] = MediaType::discover_mediatype(f->filename);
+    dest[12] = MediaType::discover_mediatype(f->filename);
+
+    Debug_printf("Addtl: ");
+    for (int i = 0; i < ADDITIONAL_DETAILS_BYTES; i++)
+        Debug_printf("%02x ", dest[i]);
+    Debug_printf("\n");
 }
+
+char current_entry[256];
 
 void drivewireFuji::read_directory_entry()
 {
     uint8_t maxlen = fnUartBUS.read();
     uint8_t addtl = fnUartBUS.read();
 
-    Debug_printf("Fuji cmd: READ DIRECTORY ENTRY (max=%hu)\n", maxlen);
+    Debug_printf("Fuji cmd: READ DIRECTORY ENTRY (max=%hu) (addtl=%02x)\n", maxlen, addtl);
 
-    char current_entry[256];
+    memset(current_entry, 0, sizeof(current_entry));
 
     fsdir_entry_t *f = _fnHosts[_current_open_directory_slot].dir_nextfile();
 
@@ -850,15 +859,16 @@ void drivewireFuji::read_directory_entry()
         Debug_printf("::read_direntry \"%s\"\n", f->filename);
 
         int bufsize = sizeof(current_entry);
-        char *filenamedest = current_entry;
+        int fno=0;
 
         // If 0x80 is set on AUX2, send back additional information
         if (addtl & 0x80)
         {
-            _set_additional_direntry_details(f, (uint8_t *)dirpath, maxlen);
+            Debug_printf("Add additional info.\n");
+            _set_additional_direntry_details(f, (uint8_t *)current_entry, maxlen);
             // Adjust remaining size of buffer and file path destination
             bufsize = sizeof(dirpath) - ADDITIONAL_DETAILS_BYTES;
-            filenamedest = dirpath + ADDITIONAL_DETAILS_BYTES;
+            fno += ADDITIONAL_DETAILS_BYTES;
         }
         else
         {
@@ -866,7 +876,7 @@ void drivewireFuji::read_directory_entry()
         }
 
         // int filelen = strlcpy(filenamedest, f->filename, bufsize);
-        int filelen = util_ellipsize(f->filename, filenamedest, bufsize);
+        int filelen = util_ellipsize(f->filename, &current_entry[fno], bufsize);
 
         // Add a slash at the end of directory entries
         if (f->isDir && filelen < (bufsize - 2))
@@ -875,7 +885,7 @@ void drivewireFuji::read_directory_entry()
             current_entry[filelen + 1] = '\0';
         }
     }
-
+    
     fnUartBUS.write((uint8_t *)current_entry, maxlen);
 }
 
@@ -945,72 +955,60 @@ void drivewireFuji::get_adapter_config()
     fnWiFi.get_mac(cfg.macAddress);
 
     fnUartBUS.write((uint8_t *)&cfg, sizeof(cfg));
+    Debug_printf("Sizeof cfg: %u\n",sizeof(cfg));
 }
 
 //  Make new disk and shove into device slot
 void drivewireFuji::new_disk()
 {
-    // Debug_println("Fuji cmd: NEW DISK");
+    Debug_println("Fuji cmd: NEW DISK");
 
-    // struct
-    // {
-    //     unsigned short numSectors;
-    //     unsigned short sectorSize;
-    //     unsigned char hostSlot;
-    //     unsigned char deviceSlot;
-    //     char filename[MAX_FILENAME_LEN]; // WIll set this to MAX_FILENAME_LEN, later.
-    // } newDisk;
+    struct
+    {
+        unsigned short numDisks;
+        unsigned char hostSlot;
+        unsigned char deviceSlot;
+        char filename[MAX_FILENAME_LEN]; // WIll set this to MAX_FILENAME_LEN, later.
+    } newDisk;
 
-    // // Ask for details on the new disk to create
-    // uint8_t ck = bus_to_peripheral((uint8_t *)&newDisk, sizeof(newDisk));
+    fnUartBUS.readBytes((uint8_t *)&newDisk, sizeof(newDisk));
 
-    // if (ck != drivewire_checksum((uint8_t *)&newDisk, sizeof(newDisk)))
-    // {
-    //     Debug_print("drivewire_new_disk Bad checksum\n");
-    //     drivewire_error();
-    //     return;
-    // }
-    // if (newDisk.deviceSlot >= MAX_DISK_DEVICES || newDisk.hostSlot >= MAX_HOSTS)
-    // {
-    //     Debug_print("drivewire_new_disk Bad disk or host slot parameter\n");
-    //     drivewire_error();
-    //     return;
-    // }
-    // // A couple of reference variables to make things much easier to read...
-    // fujiDisk &disk = _fnDisks[newDisk.deviceSlot];
-    // fujiHost &host = _fnHosts[newDisk.hostSlot];
+    // A couple of reference variables to make things much easier to read...
+    fujiDisk &disk = _fnDisks[newDisk.deviceSlot];
+    fujiHost &host = _fnHosts[newDisk.hostSlot];
 
-    // disk.host_slot = newDisk.hostSlot;
-    // disk.access_mode = DISK_ACCESS_MODE_WRITE;
-    // strlcpy(disk.filename, newDisk.filename, sizeof(disk.filename));
+    disk.host_slot = newDisk.hostSlot;
+    disk.access_mode = DISK_ACCESS_MODE_WRITE;
+    strlcpy(disk.filename, newDisk.filename, sizeof(disk.filename));
 
-    // if (host.file_exists(disk.filename))
-    // {
-    //     Debug_printf("drivewire_new_disk File exists: \"%s\"\n", disk.filename);
-    //     drivewire_error();
-    //     return;
-    // }
+    if (host.file_exists(disk.filename))
+    {
+        Debug_printf("drivewire_new_disk File exists: \"%s\"\n", disk.filename);
+        drivewire_error();
+        return;
+    }
 
-    // disk.fileh = host.file_open(disk.filename, disk.filename, sizeof(disk.filename), "w");
-    // if (disk.fileh == nullptr)
-    // {
-    //     Debug_printf("drivewire_new_disk Couldn't open file for writing: \"%s\"\n", disk.filename);
-    //     drivewire_error();
-    //     return;
-    // }
+    disk.fileh = host.file_open(disk.filename, disk.filename, sizeof(disk.filename), "w");
+    if (disk.fileh == nullptr)
+    {
+        Debug_printf("drivewire_new_disk Couldn't open file for writing: \"%s\"\n", disk.filename);
+        drivewire_error();
+        return;
+    }
 
-    // bool ok = disk.disk_dev.write_blank(disk.fileh, newDisk.sectorSize, newDisk.numSectors);
-    // fclose(disk.fileh);
+    bool ok = disk.disk_dev.write_blank(disk.fileh, newDisk.numDisks);
 
-    // if (ok == false)
-    // {
-    //     Debug_print("drivewire_new_disk Data write failed\n");
-    //     drivewire_error();
-    //     return;
-    // }
+    fclose(disk.fileh);
 
-    // Debug_print("drivewire_new_disk succeeded\n");
-    // drivewire_complete();
+    if (ok == false)
+    {
+        Debug_print("drivewire_new_disk Data write failed\n");
+        drivewire_error();
+        return;
+    }
+
+    Debug_print("drivewire_new_disk succeeded\n");
+    drivewire_complete();
 }
 
 // Unmount specified host
@@ -1201,7 +1199,7 @@ void drivewireFuji::set_device_filename()
     uint8_t host = fnUartBUS.read();
     uint8_t mode = fnUartBUS.read();
 
-    fnUartBUS.readBytes(tmp,MAX_FILENAME_LEN);
+    fnUartBUS.readBytes(tmp, MAX_FILENAME_LEN);
 
     Debug_printf("Fuji cmd: SET DEVICE SLOT 0x%02X/%02X/%02X FILENAME: %s\n", slot, host, mode, tmp);
 
@@ -1295,6 +1293,12 @@ std::string drivewireFuji::get_host_prefix(int host_slot)
     return _fnHosts[host_slot].get_prefix();
 }
 
+void drivewireFuji::device_error()
+{
+    Debug_printf("FUJI DEVICE STATUS\n");
+    // fnUartBUS.write(0x2A);
+}
+
 void drivewireFuji::process()
 {
     uint8_t c = fnUartBUS.read();
@@ -1363,6 +1367,9 @@ void drivewireFuji::process()
         break;
     case FUJICMD_UNMOUNT_IMAGE:
         disk_image_umount();
+        break;
+    case FUJICMD_DEVICE_ERROR:
+        device_error();
         break;
     default:
         break;

@@ -8,18 +8,18 @@
 #define MEATLOAF_MEDIA_T64
 
 #include "meat_io.h"
-#include "cbm_media.h"
+#include "meat_media.h"
 
 
 /********************************************************
  * Streams
  ********************************************************/
 
-class T64IStream : public CBMImageStream {
+class T64IStream : public MImageStream {
     // override everything that requires overriding here
 
 public:
-    T64IStream(std::shared_ptr<MStream> is) : CBMImageStream(is) { };
+    T64IStream(std::shared_ptr<MStream> is) : MImageStream(is) { };
 
 protected:
     struct Header {
@@ -55,6 +55,8 @@ protected:
     Header header;
     Entry entry;
 
+    std::string decodeType(uint8_t file_type, bool show_hidden = false) override;
+
 private:
     friend class T64File;
 };
@@ -71,14 +73,14 @@ public:
         isDir = is_dir;
 
         media_image = name;
-        //mstr::toUTF8(media_image);
+        isPETSCII = true;
     };
     
     ~T64File() {
         // don't close the stream here! It will be used by shared ptr D64Util to keep reading image params
     }
 
-    MStream* createIStream(std::shared_ptr<MStream> containerIstream) override;
+    MStream* getDecodedStream(std::shared_ptr<MStream> containerIstream) override;
 
     bool isDirectory() override;
     bool rewindDirectory() override;
@@ -87,7 +89,7 @@ public:
 
     bool exists() override { return true; };
     bool remove() override { return false; };
-    bool rename(std::string dest) { return false; };
+    bool rename(std::string dest) override { return false; };
     time_t getLastWrite() override { return 0; };
     time_t getCreationTime() override { return 0; };
     uint32_t size() override;
@@ -109,7 +111,7 @@ public:
         return new T64File(path);
     }
 
-    bool handles(std::string fileName) {
+    bool handles(std::string fileName) override {
         return byExtension(".t64", fileName);
     }
 

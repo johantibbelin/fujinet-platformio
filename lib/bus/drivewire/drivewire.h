@@ -23,6 +23,8 @@
 #include <freertos/queue.h>
 
 #include <forward_list>
+#include <map>
+#include <fnUART.h>
 
 #define DRIVEWIRE_BAUDRATE 57600
 
@@ -48,6 +50,7 @@
 #define		OP_PRINTFLUSH	'F'
 #define     OP_VPORT_READ    'C'
 #define     OP_FUJI 0xE2
+#define     OP_NET 0xE3
 
 #define FEATURE_EMCEE    0x01
 #define FEATURE_DLOAD    0x02
@@ -150,6 +153,16 @@ public:
     bool device_active = true;
 
     /**
+     * @brief return true to indicate successful command
+     */
+    void drivewire_complete() { fnUartBUS.write(true); }
+
+    /**
+     * @brief return false to indicate unsuccessful command
+     */
+    void drivewire_error() { fnUartBUS.write(false); }
+
+    /**
      * @brief Get the systemBus object that this virtualDevice is attached to.
      */
     systemBus get_bus();
@@ -175,7 +188,8 @@ private:
     virtualDevice *_activeDev = nullptr;
     drivewireModem *_modemDev = nullptr;
     drivewireFuji *_fujiDev = nullptr;
-    drivewireNetwork *_netDev[8] = {nullptr};
+    //drivewireNetwork *_netDev[8] = {nullptr};
+    std::map<uint8_t,drivewireNetwork *> _netDev;
     drivewireUDPStream *_udpDev = nullptr;
     drivewireCassette *_cassetteDev = nullptr;
     drivewireCPM *_cpmDev = nullptr;
@@ -211,6 +225,7 @@ private:
     void op_reset();
     void op_readex();
     void op_fuji();
+    void op_net();
     void op_write();
     void op_time();
     void op_init();

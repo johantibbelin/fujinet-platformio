@@ -5,9 +5,11 @@
 #include "Protocol.h"
 
 #include <algorithm>
+#include <errno.h>
 
 #include "../../include/debug.h"
 
+#include "compat_inet.h"
 #include "status_error_codes.h"
 #include "utils.h"
 #include "string_utils.h"
@@ -66,9 +68,9 @@ using namespace std;
  * @param tx_buf pointer to transmit buffer
  * @param sp_buf pointer to special buffer
  */
-NetworkProtocol::NetworkProtocol(string *rx_buf,
-                                 string *tx_buf,
-                                 string *sp_buf)
+NetworkProtocol::NetworkProtocol(std::string *rx_buf,
+                                 std::string *tx_buf,
+                                 std::string *sp_buf)
 {
     Debug_printf("NetworkProtocol::ctor()\r\n");
 
@@ -98,7 +100,7 @@ NetworkProtocol::~NetworkProtocol()
  * @param urlParser The URL object passed in to open.
  * @param cmdFrame The command frame to extract aux1/aux2/etc.
  */
-bool NetworkProtocol::open(EdUrlParser *urlParser, cmdFrame_t *cmdFrame)
+bool NetworkProtocol::open(PeoplesUrlParser *urlParser, cmdFrame_t *cmdFrame)
 {
     // Set translation mode, Bits 0-1 of aux2
     translation_mode = cmdFrame->aux2 & 0x7F; // we now have more xlation modes.
@@ -248,11 +250,39 @@ unsigned short NetworkProtocol::translate_transmit_buffer()
  */
 void NetworkProtocol::errno_to_error()
 {
-    switch (errno)
+    int err = compat_getsockerr();
+    switch (err)
     {
+#if defined(_WIN32)
+    case WSAEWOULDBLOCK:
+        error = 1; // This is okay.
+        compat_setsockerr(0); // Short circuit and say it's okay.
+    case WSAEADDRINUSE:
+        error = NETWORK_ERROR_ADDRESS_IN_USE;
+        break;
+    case WSAEINPROGRESS:
+    case WSAEALREADY:
+        error = NETWORK_ERROR_CONNECTION_ALREADY_IN_PROGRESS;
+        break;
+    case WSAECONNRESET:
+        error = NETWORK_ERROR_CONNECTION_RESET;
+        break;
+    case WSAECONNREFUSED:
+        error = NETWORK_ERROR_CONNECTION_REFUSED;
+        break;
+    case WSAENETUNREACH:
+        error = NETWORK_ERROR_NETWORK_UNREACHABLE;
+        break;
+    case WSAETIMEDOUT:
+        error = NETWORK_ERROR_SOCKET_TIMEOUT;
+        break;
+    case WSAENETDOWN:
+        error = NETWORK_ERROR_NETWORK_DOWN;
+        break;
+#else
     case EAGAIN:
         error = 1; // This is okay.
-        errno = 0; // Short circuit and say it's okay.
+        compat_setsockerr(0); // Short circuit and say it's okay.
         break;
     case EADDRINUSE:
         error = NETWORK_ERROR_ADDRESS_IN_USE;
@@ -275,8 +305,9 @@ void NetworkProtocol::errno_to_error()
     case ENETDOWN:
         error = NETWORK_ERROR_NETWORK_DOWN;
         break;
+#endif
     default:
-        Debug_printf("errno_to_error() - Uncaught errno = %u, returning 144.\r\n", errno);
+        Debug_printf("errno_to_error() - Uncaught errno = %u, returning 144.\r\n", err);
         error = NETWORK_ERROR_GENERAL;
         break;
     }

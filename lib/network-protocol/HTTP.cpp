@@ -30,7 +30,7 @@ DELETE, MKCOL, RMCOL, COPY, MOVE, are all handled via idempotent XIO commands.
 DELETE can be done via special/XIO if you do not want to handle the response, otherwise use aux1=5/9 with normal open/read.
 */
 
-NetworkProtocolHTTP::NetworkProtocolHTTP(string *rx_buf, string *tx_buf, string *sp_buf)
+NetworkProtocolHTTP::NetworkProtocolHTTP(std::string *rx_buf, std::string *tx_buf, std::string *sp_buf)
     : NetworkProtocolFS(rx_buf, tx_buf, sp_buf)
 {
     rename_implemented = true;
@@ -161,12 +161,12 @@ bool NetworkProtocolHTTP::open_dir_handle()
     if (client != nullptr)
     {
         delete client;
-        client = new fnHttpClient();
-        client->begin(opened_url->toString());
+        client = new HTTP_CLIENT_CLASS();
+        client->begin(opened_url->url);
     }
 
     // client->begin already called in mount()
-    resultCode = client->PROPFIND(fnHttpClient::webdav_depth::DEPTH_1, "<?xml version=\"1.0\"?>\r\n<D:propfind xmlns:D=\"DAV:\">\r\n<D:prop>\r\n<D:displayname />\r\n<D:getcontentlength /></D:prop>\r\n</D:propfind>\r\n");
+    resultCode = client->PROPFIND(HTTP_CLIENT_CLASS::webdav_depth::DEPTH_1, "<?xml version=\"1.0\"?>\r\n<D:propfind xmlns:D=\"DAV:\">\r\n<D:prop>\r\n<D:displayname />\r\n<D:getcontentlength /></D:prop>\r\n</D:propfind>\r\n");
 
     if (resultCode > 399)
     {
@@ -211,8 +211,8 @@ bool NetworkProtocolHTTP::open_dir_handle()
     if (client != nullptr)
     {
         delete client;
-        client = new fnHttpClient();
-        client->begin(opened_url->toString());
+        client = new HTTP_CLIENT_CLASS();
+        client->begin(opened_url->url);
     }
 
     // Directory parsed, ready to be returned by read_dir_entry()
@@ -220,24 +220,30 @@ bool NetworkProtocolHTTP::open_dir_handle()
     return false;
 }
 
-bool NetworkProtocolHTTP::mount(EdUrlParser *url)
+bool NetworkProtocolHTTP::mount(PeoplesUrlParser *url)
 {
-    Debug_printf("NetworkProtocolHTTP::mount(%s)\r\n", url->toString().c_str());
+    Debug_printf("NetworkProtocolHTTP::mount(%s)\r\n", url->url.c_str());
 
     // fix scheme because esp-idf hates uppercase for some #()$@ reason.
     if (url->scheme == "HTTP")
+    {
         url->scheme = "http";
+        url->rebuildUrl();
+    }
     else if (url->scheme == "HTTPS")
+    {
         url->scheme = "https";
+        url->rebuildUrl();
+    }
 
-    client = new fnHttpClient();
+    client = new HTTP_CLIENT_CLASS();
 
     // fileSize = 65535;
 
     if (aux1_open == 6)
         util_replaceAll(url->path, "*.*", "");
 
-    return !client->begin(url->toString());
+    return !client->begin(url->url);
 }
 
 bool NetworkProtocolHTTP::umount()
@@ -351,8 +357,19 @@ bool NetworkProtocolHTTP::status_file(NetworkStatus *status)
         }
         auto available = client->available();
         status->rxBytesWaiting = available > 65535 ? 65535 : available;
+#ifdef ESP_PLATFORM
         status->connected = client->is_transaction_done() ? 0 : 1;
-        status->error = available == 0 && client->is_transaction_done() && error == NETWORK_ERROR_SUCCESS ? NETWORK_ERROR_END_OF_FILE : error;
+        if (available == 0 && client->is_transaction_done() && error == NETWORK_ERROR_SUCCESS)
+            status->error = NETWORK_ERROR_END_OF_FILE;
+        else
+            status->error = error;
+#else
+        status->connected = available == 0 ? 0 : 1;
+        if (available == 0 && error == NETWORK_ERROR_SUCCESS)
+            status->error = NETWORK_ERROR_END_OF_FILE;
+        else
+            status->error = error;
+#endif
         // Debug_printf("NetworkProtocolHTTP::status_file DATA, available: %d, s.rxBW: %d, s.conn: %d, s.err: %d\r\n", available, status->rxBytesWaiting, status->connected, status->error);
         return false;
     }
@@ -502,14 +519,14 @@ bool NetworkProtocolHTTP::write_file_handle_get_header(uint8_t *buf, unsigned sh
 
         // Remove EOL, make NUL delimited.
         for (int i = 0; i < len; i++)
-            if (requestedHeader[i] == 0x9B)
+            if ((unsigned char)requestedHeader[i] == 0x9B)
                 requestedHeader[i] = 0x00;
             else if (requestedHeader[i] == 0x0D)
                 requestedHeader[i] = 0x00;
             else if (requestedHeader[i] == 0x0a)
                 requestedHeader[i] = 0x00;
 
-        Debug_printf("collect_headers[%u,%u] = \"%s\"\r\n", collect_headers_count, len, requestedHeader);
+        Debug_printf("collect_headers[%lu,%u] = \"%s\"\r\n", (unsigned long)collect_headers_count, len, requestedHeader);
 
         // Add result to header array.
         collect_headers[collect_headers_count++] = requestedHeader;
@@ -524,22 +541,33 @@ bool NetworkProtocolHTTP::write_file_handle_get_header(uint8_t *buf, unsigned sh
 
 bool NetworkProtocolHTTP::write_file_handle_set_header(uint8_t *buf, unsigned short len)
 {
-    string incomingHeader = string((char *)buf, len);
+    std::string incomingHeader = std::string((char *)buf, len);
     size_t pos = incomingHeader.find('\x9b');
 
     // Erase ATASCII EOL if present
-    if (pos != string::npos)
+    if (pos != std::string::npos)
         incomingHeader.erase(pos);
 
     // Find delimiter
     pos = incomingHeader.find(":");
 
-    if (pos == string::npos)
+    if (pos == std::string::npos)
         return true;
 
+#ifdef ESP_PLATFORM
     Debug_printf("NetworkProtocolHTTP::write_file_set_header(%s,%s)\r\n", incomingHeader.substr(0, pos).c_str(), incomingHeader.substr(pos + 2).c_str());
 
     client->set_header(incomingHeader.substr(0, pos).c_str(), incomingHeader.substr(pos + 2).c_str());
+#else // TODO merge
+    std::string key(incomingHeader.substr(0, pos));
+    std::string val(incomingHeader.substr(pos + 2));
+    util_string_trim(key);
+    util_string_trim(val);
+
+    Debug_printf("NetworkProtocolHTTP::write_file_set_header(%s,%s)\r\n", key.c_str(), val.c_str());
+
+    client->set_header(key.c_str(), val.c_str());
+#endif
     return false;
 }
 
@@ -551,7 +579,7 @@ bool NetworkProtocolHTTP::write_file_handle_send_post_data(uint8_t *buf, unsigne
         return true;
     }
 
-    postData += string((char *)buf, len);
+    postData += std::string((char *)buf, len);
     return false;
 }
 
@@ -563,7 +591,7 @@ bool NetworkProtocolHTTP::write_file_handle_data(uint8_t *buf, unsigned short le
         return true;
     }
 
-    postData += string((char *)buf, len);
+    postData += std::string((char *)buf, len);
     return false; // come back here later.
 }
 
@@ -572,7 +600,7 @@ bool NetworkProtocolHTTP::stat()
     bool ret = false;
     return ret; // short circuit it for now.
 
-    Debug_printf("NetworkProtocolHTTP::stat(%s)\r\n", opened_url->toString().c_str());
+    Debug_printf("NetworkProtocolHTTP::stat(%s)\r\n", opened_url->url.c_str());
 
     if (aux1_open != 4) // only for READ FILE
         return false;   // We don't care.
@@ -581,8 +609,8 @@ bool NetworkProtocolHTTP::stat()
     delete client;
 
     // Temporarily use client to do the HEAD request
-    client = new fnHttpClient();
-    client->begin(opened_url->toString());
+    client = new HTTP_CLIENT_CLASS();
+    client->begin(opened_url->url);
     resultCode = client->HEAD();
     fserror_to_error();
 
@@ -597,8 +625,8 @@ bool NetworkProtocolHTTP::stat()
         delete client;
 
         // Recreate it for the rest of resolve()
-        client = new fnHttpClient();
-        ret = !client->begin(opened_url->toString());
+        client = new HTTP_CLIENT_CLASS();
+        ret = !client->begin(opened_url->url);
         resultCode = 0; // so GET will actually happen.
     }
 
@@ -637,7 +665,7 @@ void NetworkProtocolHTTP::http_transaction()
 
         for (int i = 0; i < client->get_header_count(); i++)
         {
-            returned_headers.push_back(string(client->get_header(collect_headers[i]) + "\x9b"));
+            returned_headers.push_back(std::string(client->get_header(collect_headers[i]) + "\x9b"));
         }
     }
 
@@ -654,7 +682,7 @@ bool NetworkProtocolHTTP::parseDir(char *buf, unsigned short len)
 
     if (p == nullptr)
     {
-        Debug_printf("NetworkProtocolHTTP::parseDir(%p,%u) - could not create expat parser. Aborting.\r\n");
+        Debug_printf("NetworkProtocolHTTP::parseDir(%p,%u) - could not create expat parser. Aborting.\r\n", buf, len);
         return true;
     }
 
@@ -680,7 +708,7 @@ bool NetworkProtocolHTTP::parseDir(char *buf, unsigned short len)
     return err;
 }
 
-bool NetworkProtocolHTTP::rename(EdUrlParser *url, cmdFrame_t *cmdFrame)
+bool NetworkProtocolHTTP::rename(PeoplesUrlParser *url, cmdFrame_t *cmdFrame)
 {
     if (NetworkProtocolFS::rename(url, cmdFrame) == true)
         return true;
@@ -697,9 +725,9 @@ bool NetworkProtocolHTTP::rename(EdUrlParser *url, cmdFrame_t *cmdFrame)
     return resultCode > 399;
 }
 
-bool NetworkProtocolHTTP::del(EdUrlParser *url, cmdFrame_t *cmdFrame)
+bool NetworkProtocolHTTP::del(PeoplesUrlParser *url, cmdFrame_t *cmdFrame)
 {
-    Debug_printf("NetworkProtocolHTTP::del(%s,%s)", url->hostName.c_str(), url->path.c_str());
+    Debug_printf("NetworkProtocolHTTP::del(%s,%s)", url->host.c_str(), url->path.c_str());
     mount(url);
 
     resultCode = client->DELETE();
@@ -710,9 +738,9 @@ bool NetworkProtocolHTTP::del(EdUrlParser *url, cmdFrame_t *cmdFrame)
     return resultCode > 399;
 }
 
-bool NetworkProtocolHTTP::mkdir(EdUrlParser *url, cmdFrame_t *cmdFrame)
+bool NetworkProtocolHTTP::mkdir(PeoplesUrlParser *url, cmdFrame_t *cmdFrame)
 {
-    Debug_printf("NetworkProtocolHTTP::mkdir(%s,%s)", url->hostName.c_str(), url->path.c_str());
+    Debug_printf("NetworkProtocolHTTP::mkdir(%s,%s)", url->host.c_str(), url->path.c_str());
 
     mount(url);
 
@@ -723,7 +751,7 @@ bool NetworkProtocolHTTP::mkdir(EdUrlParser *url, cmdFrame_t *cmdFrame)
     return resultCode > 399;
 }
 
-bool NetworkProtocolHTTP::rmdir(EdUrlParser *url, cmdFrame_t *cmdFrame)
+bool NetworkProtocolHTTP::rmdir(PeoplesUrlParser *url, cmdFrame_t *cmdFrame)
 {
     return del(url, cmdFrame);
 }

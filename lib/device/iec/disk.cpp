@@ -16,7 +16,7 @@
 #include "led.h"
 #include "utils.h"
 
-#include "cbm_media.h"
+#include "meat_media.h"
 
 // External ref to fuji object.
 extern iecFuji theFuji;
@@ -203,7 +203,6 @@ void iecDisk::iec_open()
         payload = pt[0];
         //Debug_printv("filename[%s] type[%s] mode[%s]", pt[0].c_str(), pt[1].c_str(), pt[2].c_str());
     }
-    //mstr::toUTF8(s);
 
     Debug_printv("payload[%s]", payload.c_str());
 
@@ -224,6 +223,7 @@ void iecDisk::iec_open()
         if ( payload[0] == '$' ) 
             payload.clear();
 
+        payload = mstr::toUTF8(payload);
         auto n = _base->cd( payload );
         if ( n != nullptr )
             _base.reset( n );
@@ -347,10 +347,24 @@ void iecDisk::iec_command()
     switch ( payload[0] )
     {
         case 'B':
+            if (payload[1] == '-')
+            {
             // B-P buffer pointer
+                if (payload[2] == 'P')
+                {
+                    payload = mstr::drop(payload, 3);
+                    mstr::trim(payload);
+                    mstr::replaceAll(payload, "  ", " ");
+                    pti = util_tokenize_uint8(payload);
+                    Debug_printv("payload[%s] channel[%d] position[%d]", payload.c_str(), pti[0], pti[1]);
+
+                    auto stream = retrieveStream( pti[0] );
+                    stream->position( pti[1] );
+                }
             // B-A allocate bit in BAM not implemented
             // B-F free bit in BAM not implemented
             // B-E block execute impossible at this level of emulation!
+            }
             //Error(ERROR_31_SYNTAX_ERROR);
             Debug_printv( "block/buffer");
         break;
@@ -372,8 +386,29 @@ void iecDisk::iec_command()
         case 'M':
             if ( payload[1] == '-' ) // Memory
             {
-                Debug_printv( "memory");
-                //Memory();
+                if (payload[2] == 'R') // M-R memory read
+                {
+                    payload = mstr::drop(payload, 3);
+                    std::string code = mstr::toHex(payload);
+                    uint16_t address = (payload[0] | payload[1] << 8);
+                    uint8_t size = payload[2];
+                    Debug_printv("Memory Read [%s]", code.c_str());
+                    Debug_printv("address[%.4X] size[%d]", address, size);
+                }
+                else if (payload[2] == 'W') // M-W memory write
+                {
+                    payload = mstr::drop(payload, 3);
+                    std::string code = mstr::toHex(payload);
+                    uint16_t address = (payload[0] | payload[1] << 8);
+                    Debug_printv("Memory Write address[%.4X][%s]", address, code.c_str());
+                }
+                else if (payload[2] == 'E') // M-E memory write
+                {
+                    payload = mstr::drop(payload, 3);
+                    std::string code = mstr::toHex(payload);
+                    uint16_t address = (payload[0] | payload[1] << 8);
+                    Debug_printv("Memory Execute address[%.4X][%s]", address, code.c_str());
+                }
             }
         break;
         case 'N':
@@ -400,6 +435,8 @@ void iecDisk::iec_command()
             if (payload[1] == '1') // User 1
             {
                 payload = mstr::drop(payload, 3);
+                mstr::trim(payload);
+                mstr::replaceAll(payload, "  ", " ");
                 pti = util_tokenize_uint8(payload);
                 Debug_printv("payload[%s] channel[%d] media[%d] track[%d] sector[%d]", payload.c_str(), pti[0], pti[1], pti[2], pti[3]);
 
@@ -556,6 +593,7 @@ void iecDisk::set_prefix()
         path = mstr::drop(path, 1);
 
     Debug_printv("path[%s]", path.c_str());
+    path = mstr::toUTF8( path );
     auto n = _base->cd( path );
     if ( n != nullptr )
         _base.reset( n );
@@ -593,7 +631,7 @@ bool iecDisk::registerStream (uint8_t channel)
             return false;
 
         Debug_printv("LOAD \"%s\"", _base->url.c_str());
-        new_stream = std::shared_ptr<MStream>(_base->meatStream());
+        new_stream = std::shared_ptr<MStream>(_base->getSourceStream());
     }
 
     // SAVE / PUT / PRINT / WRITE
@@ -601,13 +639,13 @@ bool iecDisk::registerStream (uint8_t channel)
     {
         Debug_printv("SAVE \"%s\"", _base->url.c_str());
         // CREATE STREAM HERE FOR OUTPUT
-        new_stream = std::shared_ptr<MStream>(_base->meatStream());
+        new_stream = std::shared_ptr<MStream>(_base->getSourceStream());
         new_stream->open();
     }
     else
     {
         Debug_printv("OTHER \"%s\"", _base->url.c_str());
-        new_stream = std::shared_ptr<MStream>(_base->meatStream());
+        new_stream = std::shared_ptr<MStream>(_base->getSourceStream());
     }
 
 
@@ -813,6 +851,7 @@ uint16_t iecDisk::sendHeader(std::string header, std::string id)
         if ( IEC.flags & ERROR ) return 0;
         byte_count += sendLine(0, "%*s\"%-*s\" NFO", 0, "", 19, archive.c_str());
         if ( IEC.flags & ERROR ) return 0;
+        sent_info = true;
     }
     if (image.size())
     {
@@ -912,6 +951,9 @@ void iecDisk::sendListing()
     else
     {
         // Send listing header from media file
+        if ( !entry->isPETSCII )
+            _base->media_header = mstr::toPETSCII2( _base->media_header );
+
         byte_count += sendHeader(_base->media_header.c_str(), _base->media_id.c_str());
         if ( IEC.flags & ERROR ) return;
     }
@@ -925,6 +967,11 @@ void iecDisk::sendListing()
             if (entry->extension.length())
             {
                 extension = entry->extension;
+
+                // Change extension to PRG if it is non-standard
+                std::string valid_extensions = "delseqprgusrrelcbm";
+                if ( mstr::contains(valid_extensions, extension.c_str()) )
+                    extension = "prg";
             }
             else
             {
@@ -1035,11 +1082,10 @@ bool iecDisk::sendFile()
     {
         if ( istream->has_subdirs )
         {
-            PeoplesUrlParser u;
-            u.parseUrl( istream->url );
-            Debug_printv( "Subdir Change Directory Here! istream[%s] > base[%s]", istream->url.c_str(), u.base().c_str() );
-            _last_file = u.name;
-            _base.reset( MFSOwner::File( u.base() ) );
+            PeoplesUrlParser *u = PeoplesUrlParser::parseURL( istream->url );
+            Debug_printv( "Subdir Change Directory Here! istream[%s] > base[%s]", istream->url.c_str(), u->base().c_str() );
+            _last_file = u->name;
+            _base.reset( MFSOwner::File( u->base() ) );
         }
         else
         {
@@ -1050,11 +1096,11 @@ bool iecDisk::sendFile()
     }
 
     bool eoi = false;
-    uint32_t len = istream->size();
+    uint32_t size = istream->size();
     uint32_t avail = istream->available();
 
     //fnLedStrip.startRainbow(300);
-    Debug_printv("len[%d] avail[%d]", len, avail);
+    Debug_printv("size[%d] avail[%d]", size, avail);
 
     if( commanddata.channel == CHANNEL_LOAD )
     {
@@ -1111,7 +1157,7 @@ bool iecDisk::sendFile()
 
         b = nb; // byte = next byte
 
-        uint32_t t = (count * 100) / len;
+        uint32_t t = (count * 100) / size;
 #ifdef DATA_STREAM
         // Show ASCII Data
         if (b < 32 || b >= 127)
@@ -1148,7 +1194,7 @@ bool iecDisk::sendFile()
     }
 
 #ifdef DATA_STREAM
-      uint32_t t = (count * 100) / len;
+    uint32_t t = (count * 100) / size;
     ba[bi++] = 0;
       Debug_printf(" %s (%d %d%%) [%d]\r\n", ba, count, t, avail);
 #endif

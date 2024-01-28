@@ -446,7 +446,7 @@ void rc2014Network::set_prefix(unsigned short s)
 
     if (prefixSpec_str == "..") // Devance path N:..
     {
-        vector<int> pathLocations;
+        std::vector<int> pathLocations;
         for (int i = 0; i < prefix.size(); i++)
         {
             if (prefix[i] == '/')
@@ -661,7 +661,7 @@ void rc2014Network::create_devicespec(string d)
 void rc2014Network::create_url_parser()
 {
     std::string url = deviceSpec;
-    urlParser = EdUrlParser::parseUrl(url);
+    urlParser = PeoplesUrlParser::parseURL(url);
 }
 
 void rc2014Network::parse_and_instantiate_protocol(string d)

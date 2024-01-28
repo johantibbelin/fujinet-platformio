@@ -3,10 +3,21 @@
 
 #include <expat.h>
 
+#ifdef ESP_PLATFORM
+#include "fnHttpClient.h"
+#define HTTP_CLIENT_CLASS fnHttpClient
+#else
+#include "mgHttpClient.h"
+#define HTTP_CLIENT_CLASS mgHttpClient
+#endif
+
+#include "WebDAV.h"
 #include "FS.h"
 
-#include "fnHttpClient.h"
-#include "WEBDAV.h"
+// on Windows/MinGW DELETE is defined already ...
+#if defined(_WIN32) && defined(DELETE)
+#undef DELETE
+#endif
 
 class NetworkProtocolHTTP : public NetworkProtocolFS
 {
@@ -18,7 +29,7 @@ public:
      * @param sp_buf pointer to special buffer
      * @return a NetworkProtocolFS object
      */
-    NetworkProtocolHTTP(string *rx_buf, string *tx_buf, string *sp_buf);
+    NetworkProtocolHTTP(std::string *rx_buf, std::string *tx_buf, std::string *sp_buf);
 
     /**
      * dTOR
@@ -57,7 +68,7 @@ protected:
      * @param url the url to mount
      * @return false on no error, true on error.
      */
-    virtual bool mount(EdUrlParser *url);
+    virtual bool mount(PeoplesUrlParser *url);
 
     /**
      * @brief Unmount TNFS server specified in mountInfo.
@@ -119,35 +130,35 @@ protected:
 
     /**
      * @brief Rename file specified by incoming devicespec.
-     * @param url pointer to EdUrlParser pointing to file/dest to rename
+     * @param url pointer to PeoplesUrlParser pointing to file/dest to rename
      * @param cmdFrame the command frame
      * @return TRUE on error, FALSE on success
      */
-    virtual bool rename(EdUrlParser *url, cmdFrame_t *cmdFrame);
+    virtual bool rename(PeoplesUrlParser *url, cmdFrame_t *cmdFrame);
 
     /**
      * @brief Delete file specified by incoming devicespec.
-     * @param url pointer to EdUrlParser pointing to file to delete
+     * @param url pointer to PeoplesUrlParser pointing to file to delete
      * @param cmdFrame the command frame
      * @return TRUE on error, FALSE on success
      */
-    virtual bool del(EdUrlParser *url, cmdFrame_t *cmdFrame);
+    virtual bool del(PeoplesUrlParser *url, cmdFrame_t *cmdFrame);
 
     /**
      * @brief Make directory specified by incoming devicespec.
-     * @param url pointer to EdUrlParser pointing to file to delete
+     * @param url pointer to PeoplesUrlParser pointing to file to delete
      * @param cmdFrame the command frame
      * @return TRUE on error, FALSE on success
      */
-    virtual bool mkdir(EdUrlParser *url, cmdFrame_t *cmdFrame);
+    virtual bool mkdir(PeoplesUrlParser *url, cmdFrame_t *cmdFrame);
 
     /**
      * @brief Remove directory specified by incoming devicespec.
-     * @param url pointer to EdUrlParser pointing to file to delete
+     * @param url pointer to PeoplesUrlParser pointing to file to delete
      * @param cmdFrame the command frame
      * @return TRUE on error, FALSE on success
      */
-    virtual bool rmdir(EdUrlParser *url, cmdFrame_t *cmdFrame);
+    virtual bool rmdir(PeoplesUrlParser *url, cmdFrame_t *cmdFrame);
 
 private:
     /**
@@ -180,7 +191,7 @@ private:
     /**
      * The fnHTTPClient object used by the adaptor for HTTP calls
      */
-    fnHttpClient *client = nullptr;
+    HTTP_CLIENT_CLASS *client = nullptr;
 
     /**
      * result code returned by an HTTP verb
@@ -200,7 +211,7 @@ private:
     /**
      * Returned headers
      */
-    vector<string> returned_headers;
+    std::vector<std::string> returned_headers;
 
     /**
      * Returned header cursor
@@ -215,7 +226,7 @@ private:
     /**
      * POST or PUT Data to send.
      */
-    string postData;
+    std::string postData;
 
     /**
      * WebDAV handler
@@ -225,7 +236,7 @@ private:
     /**
      * Current Directory entry cursor
      */
-    vector<WebDAV::DAVEntry>::iterator dirEntryCursor;
+    std::vector<WebDAV::DAVEntry>::iterator dirEntryCursor;
 
     /**
      * Do HTTP transaction

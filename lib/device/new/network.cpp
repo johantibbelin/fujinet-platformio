@@ -306,7 +306,7 @@ void adamNetwork::set_prefix(unsigned short s)
 
     if (prefixSpec_str == "..") // Devance path N:..
     {
-        vector<int> pathLocations;
+        std::vector<int> pathLocations;
         for (int i = 0; i < prefix.size(); i++)
         {
             if (prefix[i] == '/')
@@ -864,7 +864,7 @@ void adamNetwork::create_devicespec(string d)
 void adamNetwork::create_url_parser()
 {
     std::string url = deviceSpec.substr(deviceSpec.find(":") + 1);
-    urlParser = EdUrlParser::parseUrl(url);
+    urlParser = PeoplesUrlParser::parseURL(url);
 }
 
 void adamNetwork::parse_and_instantiate_protocol(string d)

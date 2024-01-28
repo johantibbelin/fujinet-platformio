@@ -1,3 +1,7 @@
+#ifdef ESP_PLATFORM
+
+// ESP UART code
+
 
 #include "fnUART.h"
 
@@ -516,3 +520,5 @@ size_t Print::println(struct tm * timeinfo, const char * format)
     return n;
 }
 */
+
+#endif // ESP_PLATFORM

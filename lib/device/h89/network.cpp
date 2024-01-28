@@ -443,7 +443,7 @@ void H89Network::set_prefix(unsigned short s)
 
     // if (prefixSpec_str == "..") // Devance path N:..
     // {
-    //     vector<int> pathLocations;
+    //     std::vector<int> pathLocations;
     //     for (int i = 0; i < prefix.size(); i++)
     //     {
     //         if (prefix[i] == '/')
@@ -626,7 +626,7 @@ void H89Network::create_devicespec(string d)
 void H89Network::create_url_parser()
 {
     std::string url = deviceSpec.substr(deviceSpec.find(":") + 1);
-    urlParser = EdUrlParser::parseUrl(url);
+    urlParser = PeoplesUrlParser::parseURL(url);
 }
 
 void H89Network::parse_and_instantiate_protocol(string d)

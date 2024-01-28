@@ -7,7 +7,7 @@
 
 #include "bus.h"
 
-#include "EdUrlParser.h"
+#include "peoples_url_parser.h"
 
 #include "Protocol.h"
 #include "fnjson.h"
@@ -146,9 +146,9 @@ private:
     std::string *specialBuffer = nullptr;
 
     /**
-     * The EdUrlParser object used to hold/process a URL
+     * The PeoplesUrlParser object used to hold/process a URL
      */
-    EdUrlParser *urlParser = nullptr;
+    PeoplesUrlParser *urlParser = nullptr;
 
     /**
      * Instance of currently open network protocol
@@ -281,7 +281,7 @@ private:
     /**
      * Create the deviceSpec and fix it for parsing
      */
-    void create_devicespec(string d);
+    void create_devicespec(std::string d);
 
     /**
      * Create a urlParser from deviceSpec

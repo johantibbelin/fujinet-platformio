@@ -25,6 +25,8 @@
 #include "SSH.h"
 #include "SMB.h"
 
+#include "ProtocolParser.h"
+
 // using namespace std;
 
 /**
@@ -253,7 +255,7 @@ void iwmNetwork::set_prefix()
 
     if (prefixSpec_str == "..") // Devance path N:..
     {
-        vector<int> pathLocations;
+        std::vector<int> pathLocations;
         for (int i = 0; i < prefix.size(); i++)
         {
             if (prefix[i] == '/')
@@ -566,7 +568,7 @@ void iwmNetwork::iwm_status(iwm_decoded_cmd_t cmd)
 {
     // uint8_t source = cmd.dest;                                                // we are the destination and will become the source // data_buffer[6];
     uint8_t status_code = get_status_code(cmd); //(cmd.g7byte3 & 0x7f) | ((cmd.grp7msb << 3) & 0x80); // status codes 00-FF
-    Debug_printf("\r\nDevice %02x Status Code %02x", id(), status_code);
+    Debug_printf("\r\n[NETWORK] Device %02x Status Code %02x\r\n", id(), status_code);
     //Debug_printf("\r\nStatus List is at %02x %02x", cmd.g7byte1 & 0x7f, cmd.g7byte2 & 0x7f);
 
     switch (status_code)
@@ -605,6 +607,7 @@ void iwmNetwork::net_read()
 
 bool iwmNetwork::read_channel_json(unsigned short num_bytes, iwm_decoded_cmd_t cmd)
 {
+    Debug_printf("read_channel_json - num_bytes: %02x, json_bytes_remaining: %02x\n", num_bytes, json.json_bytes_remaining);
     if (json.json_bytes_remaining == 0) // if no bytes, we just return with no data
     {
         data_len = 0;
@@ -614,6 +617,11 @@ bool iwmNetwork::read_channel_json(unsigned short num_bytes, iwm_decoded_cmd_t c
         data_len = json.readValueLen();
         json.readValue(data_buffer, data_len);
         json.json_bytes_remaining -= data_len;
+
+        Debug_printf("read_channel_json(1) - data_len: %02x, json_bytes_remaining: %02x\n", data_len, json.json_bytes_remaining);
+        char *msg = util_hexdump(data_buffer, data_len);
+        Debug_printf("%s\n", msg);
+        free(msg);
     }
     else
     {
@@ -621,6 +629,11 @@ bool iwmNetwork::read_channel_json(unsigned short num_bytes, iwm_decoded_cmd_t c
 
         json.readValue(data_buffer, num_bytes);
         data_len = json.readValueLen();
+
+        Debug_printf("read_channel_json(2) - data_len: %02x, json_bytes_remaining: %02x\n", data_len, json.json_bytes_remaining);
+        char *msg = util_hexdump(data_buffer, num_bytes);
+        Debug_printf("%s\n", msg);
+        free(msg);
     }
 
     return false;
@@ -630,7 +643,7 @@ bool iwmNetwork::read_channel(unsigned short num_bytes, iwm_decoded_cmd_t cmd)
 {
     NetworkStatus ns;
 
-    if ((protocol == nullptr))
+    if (protocol == nullptr)
         return true; // Punch out.
 
     // Get status
@@ -936,7 +949,7 @@ void iwmNetwork::create_devicespec(string d)
 void iwmNetwork::create_url_parser()
 {
     std::string url = deviceSpec.substr(deviceSpec.find(":") + 1);
-    urlParser = EdUrlParser::parseUrl(url);
+    urlParser = PeoplesUrlParser::parseURL(url);
 }
 
 void iwmNetwork::parse_and_instantiate_protocol(string d)

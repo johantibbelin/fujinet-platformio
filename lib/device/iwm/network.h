@@ -1,13 +1,15 @@
 #ifndef NETWORK_H
 #define NETWORK_H
 
+#ifdef ESP_PLATFORM
 #include <esp_timer.h>
+#endif
 
 #include <string>
 
 #include "../../bus/bus.h"
 
-#include "../EdUrlParser/EdUrlParser.h"
+#include "peoples_url_parser.h"
 
 #include "../network-protocol/Protocol.h"
 
@@ -50,7 +52,9 @@ public:
     /**
      * The spinlock for the ESP32 hardware timers. Used for interrupt rate limiting.
      */
+#ifdef ESP_PLATFORM // OS
     portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
+#endif
 
     /**
      * Toggled by the rate limiting timer to indicate that the PROCEED interrupt should
@@ -172,9 +176,9 @@ private:
     std::string *specialBuffer = nullptr;
 
     /**
-     * The EdUrlParser object used to hold/process a URL
+     * The PeoplesUrlParser object used to hold/process a URL
      */
-    EdUrlParser *urlParser = nullptr;
+    PeoplesUrlParser *urlParser = nullptr;
 
     /**
      * Instance of currently open network protocol
@@ -210,7 +214,9 @@ private:
     /**
      * ESP timer handle for the Interrupt rate limiting timer
      */
+#ifdef ESP_PLATFORM // OS
     esp_timer_handle_t rateTimerHandle = nullptr;
+#endif
 
     /**
      * Devicespec passed to us, e.g. N:HTTP://WWW.GOOGLE.COM:80/
@@ -296,7 +302,7 @@ private:
     /**
      * Create the deviceSpec and fix it for parsing
      */
-    void create_devicespec(string d);
+    void create_devicespec(std::string d);
 
     /**
      * Create a urlParser from deviceSpec
