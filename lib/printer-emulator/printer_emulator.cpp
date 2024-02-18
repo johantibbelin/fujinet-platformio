@@ -18,9 +18,7 @@ void printer_emu::initPrinter(FileSystem *fs)
 // destructor must be specified for the base class even though it's virtual
 printer_emu::~printer_emu()
 {
-#ifdef DEBUG
     //Debug_println("~printer_emu");
-#endif
     if(_file != nullptr)
     {
         fclose(_file);
@@ -40,9 +38,7 @@ size_t printer_emu::copy_file_to_output(const char *filename)
 
     if (fInput == nullptr)
     {
-#ifdef DEBUG
         Debug_printf("Failed to open printer concatenation file: '%s'\r\n", filename);
-#endif
         return 0;
     }
 

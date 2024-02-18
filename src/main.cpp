@@ -97,13 +97,18 @@ void print_version()
     printf("\n");
 }
 
-volatile sig_atomic_t fn_shutdown = 0;
+volatile int exit_for_restart = 0;
 
 void sighandler(int signum)
 {
-    fn_shutdown = 1 + fn_shutdown;
-    if (fn_shutdown >= 3)
-        _exit(EXIT_FAILURE); // emergency exit
+#if !defined(_WIN32)
+    if (signum == SIGHUP)
+        exit_for_restart = 1;       // graceful shutdown (with restart by run-fujinet script)
+    if (signum == SIGUSR1)
+        _exit(EXIT_AND_RESTART);    // forced exit (with restart by run-fujinet script)
+#endif
+    if (fnSystem.request_for_shutdown() >= 3)
+        _exit(EXIT_FAILURE);        // emergency exit after any 3 signals
 }
 
 #endif // !ESP_PLATFORM
@@ -194,6 +199,9 @@ void main_setup(int argc, char *argv[])
     signal(SIGTERM, sighandler);
   #if defined(_WIN32)
     signal(SIGBREAK, sighandler);
+  #else
+    signal(SIGHUP, sighandler);
+    signal(SIGUSR1, sighandler);
   #endif
 
   #if defined(_WIN32)
@@ -240,10 +248,19 @@ void main_setup(int argc, char *argv[])
 
 #ifdef ESP_PLATFORM
     SIO.addDevice(&udpDev, SIO_DEVICEID_MIDI); // UDP/MIDI device
-#else
-    pcLink.mount(1, Config.get_general_SD_path().c_str()); // mount SD as PCL1:
-    SIO.addDevice(&pcLink, SIO_DEVICEID_PCLINK); // PCLink
 #endif
+
+    // add PCLink device only if we have SD card
+    if (fnSDFAT.running())
+    {
+#ifdef ESP_PLATFORM
+        // TODO how to get the folder SD is mounted on?
+        pcLink.mount(1, "/sd"); // mount SD card as PCL1:
+#else
+        pcLink.mount(1, Config.get_general_SD_path().c_str()); // mount SD as PCL1:
+#endif
+        SIO.addDevice(&pcLink, SIO_DEVICEID_PCLINK); // PCLink
+    }
 
     // Create a new printer object, setting its output depending on whether we have SD or not
     FileSystem *ptrfs = fnSDFAT.running() ? (FileSystem *)&fnSDFAT : (FileSystem *)&fsFlash;
@@ -465,8 +482,8 @@ void main_setup(int argc, char *argv[])
   #ifdef DEBUG
     unsigned long endms = fnSystem.millis();
     Debug_printf("Available heap: %u\nSetup complete @ %lu (%lums)\r\n", fnSystem.get_free_heap_size(), endms, endms - startms);
-  #endif // DEBUG
     Debug_printv("Low Heap: %lu\n",esp_get_free_internal_heap_size());
+  #endif // DEBUG
 #else
 // !ESP_PLATFORM
     unsigned long endms = fnSystem.millis();
@@ -486,6 +503,10 @@ void fn_service_loop(void *param)
 {
 #ifdef ESP_PLATFORM
     main_setup();
+#else
+    if (fnSystem.check_for_shutdown()) {
+      return; // get out, shutdown already requested
+    }
 #endif
 
     // Now that our main service is running, try connecting to WiFi or BlueTooth
@@ -511,7 +532,7 @@ void fn_service_loop(void *param)
     // Shouldn't be a problem, but something to keep in mind...
     while (true)
 #else
-    while (!fn_shutdown)
+    while (fnSystem.check_for_shutdown() == 0)
 #endif
     {
 
@@ -590,6 +611,9 @@ int main(int argc, char *argv[])
     main_setup(argc, argv);
     // Enter service loop
     fn_service_loop(nullptr);
+
+    if (exit_for_restart)
+        fnSystem.reboot(); // calls exit(75)
     return EXIT_SUCCESS;
 }
 

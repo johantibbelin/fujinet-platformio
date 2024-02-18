@@ -130,6 +130,7 @@ const string fnHttpServiceParser::substitute_tag(const string &tag)
         FN_CPM_ENABLED,
         FN_CPM_CCP,
         FN_ALT_CFG,
+        FN_PCLINK_ENABLED,
         FN_LASTTAG
     };
 
@@ -244,14 +245,13 @@ const string fnHttpServiceParser::substitute_tag(const string &tag)
         "FN_APETIME_ENABLED",
         "FN_CPM_ENABLED",
         "FN_CPM_CCP",
-        "FN_ALT_CFG"
+        "FN_ALT_CFG",
+        "FN_PCLINK_ENABLED",
     };
 
     stringstream resultstream;
 
-#ifdef DEBUG
     // Debug_printf("Substituting tag '%s'\n", tag.c_str());
-#endif
 
     int tagid;
     for (tagid = 0; tagid < FN_LASTTAG; tagid++)
@@ -342,6 +342,9 @@ const string fnHttpServiceParser::substitute_tag(const string &tag)
 #ifdef BUILD_ATARI
     case FN_APETIME_ENABLED:
         resultstream << Config.get_apetime_enabled();
+        break;
+    case FN_PCLINK_ENABLED:
+        resultstream << Config.get_pclink_enabled();
         break;
 #endif /* BUILD_ATARI */
 
@@ -620,9 +623,7 @@ const string fnHttpServiceParser::substitute_tag(const string &tag)
         resultstream << tag;
         break;
     }
-#ifdef DEBUG
     // Debug_printf("Substitution result: \"%s\"\n", resultstream.str().c_str());
-#endif
     return resultstream.str();
 }
 
