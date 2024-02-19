@@ -609,7 +609,7 @@ bool ACSINetwork::instantiate_protocol()
  * Preprocess deviceSpec given aux1 open mode. This is used to work around various assumptions that different
  * disk utility packages do when opening a device, such as adding wildcards for directory opens.
  */
-void ACSINetwork::create_devicespec(string d)
+void ACSINetwork::create_devicespec(std::string d)
 {
     deviceSpec = util_devicespec_fix_for_parsing(d, prefix, cmdFrame.aux1 == 6, false);
 }
@@ -621,7 +621,7 @@ void ACSINetwork::create_devicespec(string d)
 void ACSINetwork::create_url_parser()
 {
     std::string url = deviceSpec.substr(deviceSpec.find(":") + 1);
-    urlParser = EdUrlParser::parseUrl(url);
+    urlParser = PeoplesUrlParser::parseURL(url);
 }
 
 void ACSINetwork::parse_and_instantiate_protocol(string d)
