@@ -377,7 +377,7 @@ void main_setup(int argc, char *argv[])
     theFuji.setup(&ACSI);
     ACSI.setup();
 
-   /* FileSystem *ptrfs = fnSDFAT.running() ? (FileSystem *)&fnSDFAT : (FileSystem *)&fsFlash;
+   FileSystem *ptrfs = fnSDFAT.running() ? (FileSystem *)&fnSDFAT : (FileSystem *)&fsFlash;
     ACSIPrinter::printer_type ptype = Config.get_printer_type(0);
     if (ptype == ACSIPrinter::printer_type::PRINTER_INVALID)
         ptype = ACSIPrinter::printer_type::PRINTER_FILE_TRIM;
@@ -386,7 +386,7 @@ void main_setup(int argc, char *argv[])
 
     ACSIPrinter *ptr = new ACSIPrinter(ptrfs, ptype);
     fnPrinters.set_entry(0, ptr, ptype, Config.get_printer_port(0));
-    */
+    
     // H89Bus.addDevice(ptr, H89_DEVICEID_PRINTER + fnPrinters.get_port(0)); // P:
 
     // H89R = new H89Modem(ptrfs, Config.get_modem_sniffer_enabled()); // Config/User selected sniffer enable
