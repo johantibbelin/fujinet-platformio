@@ -1,8 +1,8 @@
-#ifndef H89_H
-#define H89_H
+#ifndef ACSI_H
+#define ACSI_H
 
 /**
- * H89 Routines
+ * Atari16bit Routines
  */
 
 #include <freertos/FreeRTOS.h>
@@ -11,6 +11,21 @@
 
 #include <map>
 
+/* Using SIO device IDs for ACSI*/
+#define ACSI_DEVICEID_DISK 0x31
+#define ACSI_DEVICEID_DISK_LAST 0x3F
+
+#define ACSI_DEVICEID_PRINTER 0x41
+#define ACSI_DEVICEID_PRINTER_LAST 0x44
+
+
+#define ACSI_DEVICEID_FUJINET 0x70
+#define ACSI_DEVICEID_FN_NETWORK 0x71
+#define ACSI_DEVICEID_FN_NETWORK_LAST 0x78
+
+#define ACSI_DEVICEID_MODEM 0x50
+
+#define ACSI_DEVICEID_CPM 0x5A
 // This is used for the network protocol adapters.
 union cmdFrame_t
 {
@@ -56,7 +71,7 @@ protected:
     virtual void reset() {};
 
     /**
-     * @brief All H89 devices repeatedly call this routine to fan out to other methods for each command. 
+     * @brief All ACSI devices repeatedly call this routine to fan out to other methods for each command. 
      * This is typcially implemented as a switch() statement.
      */
     virtual void process(uint32_t commanddata, uint8_t checksum) = 0;
@@ -119,4 +134,4 @@ public:
 
 extern systemBus ACSI;
 
-#endif /* H89_H */
+#endif /* ACSI_H */

@@ -15,6 +15,16 @@
 #include "led.h"
 #include "modem.h" 
 
+// Calculate 8-bit checksum
+uint8_t acsi_checksum(uint8_t *buf, unsigned short len)
+{
+    unsigned int chk = 0;
+
+    for (int i = 0; i < len; i++)
+        chk = ((chk + buf[i]) >> 8) + ((chk + buf[i]) & 0xff);
+
+    return chk;
+}
 
 
 void virtualDevice::process(uint32_t commanddata, uint8_t checksum)

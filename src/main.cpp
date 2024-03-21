@@ -387,11 +387,11 @@ void main_setup(int argc, char *argv[])
     ACSIPrinter *ptr = new ACSIPrinter(ptrfs, ptype);
     fnPrinters.set_entry(0, ptr, ptype, Config.get_printer_port(0));
     
-    // H89Bus.addDevice(ptr, H89_DEVICEID_PRINTER + fnPrinters.get_port(0)); // P:
+    ACSI.addDevice(ptr, ACSI_DEVICEID_PRINTER + fnPrinters.get_port(0)); // P:
 
     // H89R = new H89Modem(ptrfs, Config.get_modem_sniffer_enabled()); // Config/User selected sniffer enable
     // H89Bus.addDevice(H89R, H89_DEVICEID_MODEM); // R:
-
+    
 #endif /* Atari 16bit */
 
 #ifdef BUILD_ADAM
