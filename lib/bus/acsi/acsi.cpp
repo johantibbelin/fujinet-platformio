@@ -45,9 +45,10 @@ void systemBus::setup()
 {
     Debug_println("ACSI SETUP");
 
-    // // Do any first time setup here
-    // fnSystem.set_pin_mode(PIN_CMD, gpio_mode_t::GPIO_MODE_INPUT); // There's no PULLUP/PULLDOWN on pins 34-39
-    // fnSystem.set_pin_mode(PIN_DATA, gpio_mode_t::GPIO_MODE_INPUT); // There's no PULLUP/PULLDOWN on pins 34-39
+    // // Setup PICO UART
+    Debug_println("Setup UART for PICO...");
+    fnSystem.set_pin_mode(PIN_UART1_RX, gpio_mode_t::GPIO_MODE_INPUT); // There's no PULLUP/PULLDOWN on pins 34-39
+    fnSystem.set_pin_mode(PIN_UART1_TX, gpio_mode_t::GPIO_MODE_OUTPUT); // There's no PULLUP/PULLDOWN on pins 34-39
 
     // fnSystem.set_pin_mode(PIN_CMD_RDY, gpio_mode_t::GPIO_MODE_OUTPUT);
     // fnSystem.digital_write(PIN_CMD_RDY, DIGI_HIGH);
