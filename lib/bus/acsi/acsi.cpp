@@ -50,6 +50,16 @@ void systemBus::setup()
     fnSystem.set_pin_mode(PIN_UART1_RX, gpio_mode_t::GPIO_MODE_INPUT); // There's no PULLUP/PULLDOWN on pins 34-39
     fnSystem.set_pin_mode(PIN_UART1_TX, gpio_mode_t::GPIO_MODE_OUTPUT); // There's no PULLUP/PULLDOWN on pins 34-39
 
+    fnUartBUS.begin(ACSI_BAUDRATE);
+    
+    /* Handshake*/
+    char handshake[4]="";
+    handshake = fnUartBUS.readBytes(4);
+    
+    if (handshake=="PICO") {
+        fnUartBUS.printf("FUJI");
+        Debug_println("UART handshake done.");
+    }
     // fnSystem.set_pin_mode(PIN_CMD_RDY, gpio_mode_t::GPIO_MODE_OUTPUT);
     // fnSystem.digital_write(PIN_CMD_RDY, DIGI_HIGH);
 
