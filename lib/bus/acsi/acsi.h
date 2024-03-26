@@ -11,7 +11,9 @@
 
 #include <map>
 
-/* Using SIO device IDs for ACSI*/
+/* Using SIO device IDs for ACSI (internally) */
+#define ACSI_BAUDRATE 576000
+
 #define ACSI_DEVICEID_DISK 0x31
 #define ACSI_DEVICEID_DISK_LAST 0x3F
 
@@ -51,12 +53,12 @@ class ACSIModem;
 class ACSIPrinter;
 
 /**
- * @brief An H89 Device
+ * @brief An ACSI Device
  */
 class virtualDevice
 {
 protected:
-    friend systemBus; // We exist on the H89 Bus, and need its methods.
+    friend systemBus; // We exist on the ACSI Bus, and need its methods.
 
     /**
      * @brief Device Number: 0-255
@@ -103,7 +105,7 @@ public:
 };
 
 /**
- * @brief The H89 Bus
+ * @brief The ACSI Bus
  */
 class systemBus
 {
