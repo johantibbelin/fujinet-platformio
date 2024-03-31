@@ -38,7 +38,19 @@ void virtualDevice::process(uint32_t commanddata, uint8_t checksum)
 
 void systemBus::service()
 {
+    uint8_t buf[32];
     // Listen to the bus, and react here.
+    if (fnUartBUS.available())
+    {
+        int c=fnUartBUS.read();
+        if (c==0) return;
+        else if (c == 'C') // acsi command follows
+       {
+        fnUartBUS.readBytes(buf,6);
+        Debug_println("ACSI command recieved.");
+ 
+        }
+    }
 }
     
 void systemBus::setup()
@@ -47,57 +59,16 @@ void systemBus::setup()
 
     // // Setup PICO UART
     Debug_println("Setup UART for PICO...");
+ 
+    fnUartBUS.begin(ACSI_BAUDRATE);
+ 
+ 
     fnSystem.set_pin_mode(PIN_UART1_RX, gpio_mode_t::GPIO_MODE_INPUT); // There's no PULLUP/PULLDOWN on pins 34-39
     fnSystem.set_pin_mode(PIN_UART1_TX, gpio_mode_t::GPIO_MODE_OUTPUT); // There's no PULLUP/PULLDOWN on pins 34-39
 
-    fnUartBUS.begin(ACSI_BAUDRATE);
+    fnUartBUS.flush();
     
-    /* Handshake*/
-    char handshake[4]="";
-    handshake = fnUartBUS.readBytes(4);
-    
-    if (handshake=="PICO") {
-        fnUartBUS.printf("FUJI");
-        Debug_println("UART handshake done.");
-    }
-    // fnSystem.set_pin_mode(PIN_CMD_RDY, gpio_mode_t::GPIO_MODE_OUTPUT);
-    // fnSystem.digital_write(PIN_CMD_RDY, DIGI_HIGH);
-
-    // fnSystem.set_pin_mode(PIN_PROCEED, gpio_mode_t::GPIO_MODE_OUTPUT);
-    // fnSystem.digital_write(PIN_PROCEED, DIGI_HIGH);
-
-    // // Set up SPI bus
-    // spi_bus_config_t bus_cfg = 
-    // {
-    //     .mosi_io_num = PIN_BUS_DEVICE_MOSI,
-    //     .miso_io_num = PIN_BUS_DEVICE_MISO,
-    //     .sclk_io_num = PIN_BUS_DEVICE_SCK,
-    //     .quadwp_io_num = -1,
-    //     .quadhd_io_num = -1,
-    //     .max_transfer_sz = 4096,
-    //     .flags=0,
-    //     .intr_flags=0,
-    // };
-
-    // spi_slave_interface_config_t slave_cfg =
-    // {
-    //     .spics_io_num=PIN_BUS_DEVICE_CS,
-    //     .flags=0,
-    //     .queue_size=1,
-    //     .mode=0,
-    //     .post_setup_cb=my_post_setup_cb,
-    //     .post_trans_cb=my_post_trans_cb
-    // };
-
-    // esp_err_t rc = spi_slave_initialize(RC2014_SPI_HOST, &bus_cfg, &slave_cfg, SPI_DMA_DISABLED);
-    // if (rc != ESP_OK) {
-    //     Debug_println("RC2014 unable to initialise bus SPI Flush");
-    // }
-
-    // // Create a message queue
-    // //qRs232Messages = xQueueCreate(4, sizeof(rs232_message_t));
-
-    // Debug_println("RC2014 Setup Flush");
+   
 }
 
 void systemBus::shutdown()

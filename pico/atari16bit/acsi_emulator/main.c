@@ -19,9 +19,11 @@
 #define VERSION 0.01
 #define LED_PIN 25
 
+static char buf[32*1024]; // Room for 64 sectors in buffer
+
 int main() {
     stdio_init_all();
-    //sleep_ms(8000);
+    sleep_ms(8000); //Wait a bit
     printf("Pico ACSI Emulator VERSION\n");
     printf("------------------\n");
 
@@ -38,20 +40,14 @@ int main() {
     gpio_set_dir(LED_PIN,GPIO_OUT);
     gpio_put(LED_PIN,0);
  
- /* Simple Handshake */
-    prinf("Simple handshake...\n");
-    uart_puts(UART_ID,"PICO");
-
-    char handshake[4];
-
-    for (int i=0;i<3;i++) {
-        handshake[i]=uart_getc(UART_ID);
-    }
-    if (handshake=="FUJI")
-        printf("Handshake completed.");
+ /* Send Test unit ready (WIP)*/
+    while(1) {
+    printf("Send test unit ready.\n");
+    uart_putc_raw(UART_ID,'C');
+    uart_putc_raw(UART_ID,0);
+    /* Wait for answer */
     
-    gpio_put(LED_PIN,1);
-
+    }
     /**
      * @brief main loop test acsiFujinet over serial.
     */
