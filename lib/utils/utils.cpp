@@ -19,6 +19,14 @@
 
 using namespace std;
 
+// non destructive version of lowercase conversion
+std::string util_tolower(const std::string& str) {
+    std::string lower_str = str;
+    std::transform(lower_str.begin(), lower_str.end(), lower_str.begin(),
+                   [](unsigned char c){ return std::tolower(c); });
+    return lower_str;
+}
+
 // convert to lowercase (in place)
 void util_string_tolower(std::string &s)
 {
@@ -982,3 +990,18 @@ void util_debug_printf(const char *fmt, ...)
     fflush(stdout);
 }
 #endif // !ESP_PLATFORM
+
+char* util_strndup(const char* s, size_t n) {
+    // Find the length of the string up to n characters
+    size_t len = strnlen(s, n);
+    // Allocate memory for the new string
+    char* new_str = (char*)malloc(len + 1);
+    if (new_str == NULL) {
+        // Allocation failed
+        return NULL;
+    }
+    // Copy the string into the new memory and null-terminate it
+    memcpy(new_str, s, len);
+    new_str[len] = '\0';
+    return new_str;
+}

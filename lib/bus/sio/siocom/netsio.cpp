@@ -28,6 +28,9 @@
  */
 #define ALIVE_RATE_MS       1000
 #define ALIVE_TIMEOUT_MS    5000
+// While debugging:
+// #define ALIVE_RATE_MS       200000
+// #define ALIVE_TIMEOUT_MS    600000
 
 // Constructor
 NetSioPort::NetSioPort() :
@@ -414,7 +417,9 @@ int NetSioPort::handle_netsio()
 
             case NETSIO_COLD_RESET:
                 // emulator cold reset, do fujinet restart
+#ifndef DEBUG_NO_REBOOT
                 fnSystem.reboot();
+#endif
                 break;
 
             default:
@@ -623,6 +628,7 @@ void NetSioPort::set_baudrate(uint32_t baud)
     txbuf[2] = (baud >> 8) & 0xff;
     txbuf[3] = (baud >> 16) & 0xff;
     txbuf[4] = (baud >> 24) & 0xff;
+    wait_for_credit(1);
     send(_fd, (char *)txbuf, sizeof(txbuf), 0);
     _baud = baud;
 }
@@ -655,7 +661,7 @@ void NetSioPort::set_proceed(bool level)
     if (last_level == new_level)
         return;
 
-    Debug_print(level ? "+" : "-");
+    Debug_print(level ? "_" : "-");
     last_level = new_level;
 
     wait_for_credit(1);
@@ -680,6 +686,18 @@ void NetSioPort::set_interrupt(bool level)
     uint8_t cmd = level ? NETSIO_INTERRUPT_ON : NETSIO_INTERRUPT_OFF;
     write_sock(&cmd, 1);
 }
+
+void NetSioPort::bus_idle(uint16_t ms)
+{
+    uint8_t cmd[3];
+    cmd[0] = NETSIO_BUS_IDLE;
+    cmd[1] = ms & 0xff;
+    cmd[2] = (ms >> 8) & 0xff;
+
+    wait_for_credit(1);
+    write_sock(cmd, sizeof(cmd));
+}
+
 
 /* Returns a single byte from the incoming stream
 */

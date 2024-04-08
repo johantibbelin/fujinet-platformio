@@ -3,16 +3,45 @@
 // TODO: Figure out why time-outs against bad addresses seem to take about 18s no matter
 // what we set the timeout value to.
 
-// workaround to avoid compile error, TODO fix include order
-#include "mongoose.h"
 #include <cstdlib>
-#include <string.h>
+#include <ctype.h>
+#include <iostream>
 #include <map>
+#include <stdio.h>
+#include <stdlib.h>
+#include <sstream>
+#include <string>
+#include <vector>
 
-#include "../../include/debug.h"
-#include "mgHttpClient.h"
+// #include <mbedtls/debug.h>
+
+#include "mongoose.h"
+#undef mkdir
+
+#if defined(_WIN32)
+
+#if MG_TLS == MG_TLS_OPENSSL
+// only convert to PEM from windows raw, so only need it here
+#include <openssl/pem.h>
+#include <openssl/x509.h>
+#endif
+
+
+#if MG_TLS == MG_TLS_MBED
+#include <mbedtls/pem.h>
+#include <mbedtls/x509_crt.h>
+#endif
+
+#include <winsock2.h>
+#include <windows.h>
+#include <wincrypt.h>
+#endif
+
 #include "fnSystem.h"
 #include "utils.h"
+#include "mgHttpClient.h"
+
+#include "../../include/debug.h"
 
 
 #define HTTPCLIENT_WAIT_FOR_CONSUMER_TASK 20000 // 20s
@@ -24,7 +53,11 @@ const char *webdav_depths[] = {"0", "1", "infinity"};
 
 mgHttpClient::mgHttpClient()
 {
-    _buffer = nullptr; //(char *)malloc(DEFAULT_HTTP_BUF_SIZE);
+    // Used for cert debugging:
+    // mbedtls_debug_set_threshold(5);
+
+    _buffer = nullptr;
+    load_system_certs();
 }
 
 // Close connection, destroy any resoruces
@@ -34,35 +67,196 @@ mgHttpClient::~mgHttpClient()
 
     if (_handle != nullptr)
         mg_mgr_free(_handle);
-        // esp_http_client_cleanup(_handle);
 
     if (_buffer != nullptr) {
-#ifdef VERBOSE_HTTP
-        Debug_printf("mgHttpClient buffer free\n");
-#endif
         free(_buffer);
+        _buffer = nullptr;
+    }
+
+    if (current_message != nullptr) {
+        freeHttpMessage(current_message);
+        current_message = nullptr;
+    }
+
+}
+
+void mgHttpClient::load_system_certs() {
+#if defined(__linux__) || defined(__APPLE__)
+    load_system_certs_unix();
+#elif defined(_WIN32)
+    load_system_certs_windows();
+#else
+    // report unsupported...
+#endif
+}
+
+#if defined(_WIN32)
+
+#if MG_TLS == MG_TLS_OPENSSL
+
+// NOTE: This is untested as I have only used mbed tls
+std::vector<std::vector<char>> ConvertCertificatesToPEM(const std::vector<std::vector<unsigned char>>& certificates) {
+    std::vector<std::vector<char>> pemCertificates;
+
+    for (const auto& certData : certificates) {
+        const unsigned char* pCertData = certData.data();
+        X509* cert = d2i_X509(NULL, &pCertData, static_cast<long>(certData.size()));
+        if (cert) {
+            BIO* bio = BIO_new(BIO_s_mem());
+            if (PEM_write_bio_X509(bio, cert)) {
+                BUF_MEM* bptr;
+                BIO_get_mem_ptr(bio, &bptr);
+                std::vector<char> pemData(bptr->data, bptr->data + bptr->length);
+                pemCertificates.push_back(pemData);
+            }
+            BIO_free(bio);
+            X509_free(cert);
+        }
+    }
+
+    return pemCertificates;
+}
+#elif MG_TLS == MG_TLS_MBED
+
+
+std::vector<std::vector<char>> ConvertCertificatesToPEM(const std::vector<std::vector<unsigned char>>& certificates) {
+    const size_t MBEDTLS_PEM_BUFFER_SIZE = 10240;
+    std::vector<std::vector<char>> pemCertificates;
+
+    for (const auto& derCert : certificates) {
+        mbedtls_x509_crt crt;
+        mbedtls_x509_crt_init(&crt);
+
+        // Parse DER certificate
+        int ret = mbedtls_x509_crt_parse_der(&crt, derCert.data(), derCert.size());
+        if (ret != 0) {
+            // we'll just skip this certificate.
+            mbedtls_x509_crt_free(&crt);
+            continue;
+        }
+
+        std::vector<char> pemCert(MBEDTLS_PEM_BUFFER_SIZE, '\0');
+        size_t pem_len = 0;
+
+        // Convert DER to PEM
+        ret = mbedtls_pem_write_buffer("-----BEGIN CERTIFICATE-----\n",
+                                       "-----END CERTIFICATE-----\n",
+                                       crt.raw.p, crt.raw.len,
+                                       reinterpret_cast<unsigned char*>(pemCert.data()), pemCert.size(), &pem_len);
+        if (ret == 0) {
+            // Resize to actual PEM length
+            pemCert.resize(pem_len - 1); // Exclude the null terminator added by mbedtls_pem_write_buffer
+            pemCertificates.push_back(std::move(pemCert));
+        }
+
+        mbedtls_x509_crt_free(&crt);
+    }
+
+    return pemCertificates;
+}
+
+#else
+// TODO: if any other MG_TLS type is used, will need to implement conversion to PEM for it.
+std::vector<std::vector<char>> ConvertCertificatesToPEM(const std::vector<std::vector<unsigned char>>& certificates) {
+    return std::vector<std::vector<char>>();
+}
+
+#endif
+
+
+std::vector<std::vector<unsigned char>> EnumerateCertificates() {
+    std::vector<std::vector<unsigned char>> certificates;
+
+    HCERTSTORE hStore = CertOpenSystemStore(NULL, "ROOT");
+    if (!hStore) {
+        std::cerr << "Failed to open certificate store\n";
+        return certificates; // Empty vector on failure
+    }
+
+    PCCERT_CONTEXT pCertContext = NULL;
+    while ((pCertContext = CertEnumCertificatesInStore(hStore, pCertContext)) != NULL) {
+        std::vector<unsigned char> certData(pCertContext->pbCertEncoded, pCertContext->pbCertEncoded + pCertContext->cbCertEncoded);
+        certificates.push_back(certData);
+    }
+
+    CertCloseStore(hStore, 0);
+    return certificates;
+}
+
+void mgHttpClient::load_system_certs_windows() {
+    auto certificates = EnumerateCertificates();
+    auto pemCertificates = ConvertCertificatesToPEM(certificates);
+    if (!pemCertificates.empty()) {
+        Debug_printf("System certificates loaded, count: %d\n", pemCertificates.size());
+        for (const auto& pemData : pemCertificates) {
+            concatenatedPEM.append(pemData.begin(), pemData.end());
+        }
+
+        ca.ptr = concatenatedPEM.c_str();
+        ca.len = concatenatedPEM.length();
+    }
+    else {
+        Debug_printf("WARNING: could not find system certificate file, falling back to local file.\n");
+        ca = mg_file_read(&mg_fs_posix, "data/ca.pem");
     }
 }
+
+#else // !_WIN32
+
+void mgHttpClient::load_system_certs_unix() {
+
+#if defined(__linux__)
+    ca = mg_file_read(&mg_fs_posix, "/etc/ssl/certs/ca-certificates.crt");
+#else // MAC
+    ca = mg_file_read(&mg_fs_posix, "/etc/ssl/cert.pem");
+#endif
+
+    if (ca.len == 0) {
+        Debug_printf("WARNING: could not find system certificate file, falling back to local file.\n");
+        ca = mg_file_read(&mg_fs_posix, "data/ca.pem");
+    } else {
+        // We need to first strip any additional lines from the CA file between certs
+        // as mbedtls does not like them
+        std::string certData(ca.ptr, ca.len);
+        std::istringstream certStream(certData);
+        std::string line;
+        std::string processedCerts;
+        bool inCertBlock = false;
+        int cert_count = 0;
+
+        while (std::getline(certStream, line)) {
+            if (line.find("-----BEGIN CERTIFICATE-----") != std::string::npos) {
+                inCertBlock = true;
+                cert_count++;
+            }
+            if (inCertBlock) {
+                processedCerts += line + "\n";
+            }
+            if (line.find("-----END CERTIFICATE-----") != std::string::npos) {
+                inCertBlock = false;
+            }
+        }
+
+        // Update 'ca' with the processed certificates
+        free((void*)ca.ptr);
+        ca.ptr = strdup(processedCerts.c_str());
+        ca.len = processedCerts.length();
+
+        Debug_printf("System certificates loaded, count: %d\n", cert_count);
+
+    }
+}
+
+#endif
 
 // Start an HTTP client session to the given URL
 bool mgHttpClient::begin(std::string url)
 {
+#ifdef VERBOSE_HTTP
     Debug_printf("mgHttpClient::begin \"%s\"\n", url.c_str());
+#endif
 
-    // esp_http_client_config_t cfg;
-    // memset(&cfg, 0, sizeof(cfg));
-    // cfg.url = url.c_str();
-    // cfg.event_handler = _httpevent_handler;
-    // cfg.user_data = this;
-    // cfg.timeout_ms = 3500; // Timeouts seem to actually be twice this value
-
-    // // Keep track of what the max redirect count is set to (the default is 10)
-    // _max_redirects = cfg.max_redirection_count == 0 ? 10 : cfg.max_redirection_count;
-    // // Keep track of the auth type set
-    // _auth_type = cfg.auth_type;
     _max_redirects = 10;
-
-    // _handle = esp_http_client_init(&cfg);
 
     _handle = new(struct mg_mgr);
     if (_handle == nullptr)
@@ -75,16 +269,13 @@ bool mgHttpClient::begin(std::string url)
 
 int mgHttpClient::available()
 {
-    if (_handle == nullptr)
-        return 0;
-
     int result = 0;
 
-    // int len = esp_http_client_get_content_length(_handle);
-    int len = _buffer_len;
-    if (len - _buffer_total_read >= 0)
-        result = len - _buffer_total_read;
-
+    if (_handle != nullptr) {
+        int len = _buffer_len;
+        if (len - _buffer_total_read >= 0)
+            result = len - _buffer_total_read;
+    }
     return result;
 }
 
@@ -96,7 +287,6 @@ int mgHttpClient::available()
 */
 int mgHttpClient::read(uint8_t *dest_buffer, int dest_bufflen)
 {
-    //Debug_println("::read");
     if (_handle == nullptr || dest_buffer == nullptr)
         return -1;
 
@@ -117,111 +307,344 @@ int mgHttpClient::read(uint8_t *dest_buffer, int dest_bufflen)
         _buffer_pos += bytes_to_copy;
         _buffer_total_read += bytes_to_copy;
 
-        // // Go ahead and return if we got as many bytes as requested
-        // if (dest_bufflen == bytes_to_copy)
-        //     return bytes_to_copy;
-
         bytes_copied = bytes_to_copy;
     }
 
     return bytes_copied;
 
-    // // Nothing left to read - later ESP-IDF versions provide esp_http_client_is_complete_data_received()
-    // if (_transaction_done)
-    // {
-    //     //Debug_println("::read download done");
-    //     return bytes_copied;
-    // }
-
-    // // Make sure store our current task handle to respond to
-    // _taskh_consumer = xTaskGetCurrentTaskHandle();
-
-    // // Our HTTP subtask is gone - say there's nothing left to read...
-    // if (_taskh_subtask == nullptr)
-    // {
-    //     Debug_println("::read subtask gone");
-    //     return bytes_copied;
-    // }
-
-    // while (bytes_copied < dest_bufflen)
-    // {
-    //     // Let the HTTP process task know to fill the buffer
-    //     //Debug_println("::read notifyGive");
-    //     xTaskNotifyGive(_taskh_subtask);
-    //     // Wait till the HTTP task lets us know it's filled the buffer
-    //     //Debug_println("::read notifyTake...");
-    //     if(ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(HTTPCLIENT_WAIT_FOR_HTTP_TASK)) != 1)
-    //     {
-    //         // Abort if we timed-out receiving the data
-    //         Debug_println("::read time-out");
-    //         return -1;
-    //     }
-    //     //Debug_println("::read got notification");
-    //     if (_buffer_len <= 0)
-    //     {
-    //         //Debug_println("::read download done");
-    //         return bytes_copied;
-    //     }
-
-    //     int dest_size = dest_bufflen - bytes_copied;
-    //     bytes_to_copy = dest_size > _buffer_len ? _buffer_len : dest_size;
-
-    //     //Debug_printf("dest_size=%d, dest_bufflen=%d, bytes_copied=%d, bytes_to_copy=%d\n",
-    //                  //dest_size, dest_bufflen, bytes_copied, bytes_to_copy);
-
-    //     memcpy(dest_buffer + bytes_copied, _buffer, bytes_to_copy);
-    //     _buffer_pos += bytes_to_copy;
-    //     _buffer_total_read += bytes_to_copy;
-    //     bytes_copied += bytes_to_copy;
-    // }
-
-    // return bytes_copied;
 }
 
-// Thorws out any waiting response body without closing the connection
 void mgHttpClient::_flush_response()
 {
-//     //Debug_println("mgHttpClient::flush_response");
-//     if (_handle == nullptr)
-//         return;
-
-//     _buffer_len = 0;
-//     esp_http_client_set_post_field(_handle, nullptr, 0);
-
-//     // Nothing left to read
-//     if (_transaction_done)
-//         return;
-
-//     // Our HTTP subtask is gone - nothing to do
-//     if (_taskh_subtask == nullptr)
-//         return;
-
-//     // Make sure store our current task handle to respond to
-//     _taskh_consumer = xTaskGetCurrentTaskHandle();
-//     do
-//     {
-//         // Let the HTTP process task know to fill the buffer
-//         //Debug_println("::flush_response notifyGive");
-//         xTaskNotifyGive(_taskh_subtask);
-//         // Wait till the HTTP task lets us know it's filled the buffer
-//         //Debug_println("::flush_response notifyTake...");
-//         ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(HTTPCLIENT_WAIT_FOR_HTTP_TASK));
-
-//     } while (!_transaction_done);
-//     //Debug_println("mgHttpClient::flush_response done");
 }
 
 // Close connection, but keep request resources
 void mgHttpClient::close()
 {
     Debug_println("mgHttpClient::close");
-//     _delete_subtask_if_running();
-
-//     if (_handle != nullptr)
-//         esp_http_client_close(_handle);
-
     _stored_headers.clear();
     _request_headers.clear();
+}
+
+void mgHttpClient::handle_connect(struct mg_connection *c)
+{
+#ifdef VERBOSE_HTTP
+    Debug_printf("mgHttpClient: Connected\n");
+#endif
+    _transaction_done = false;
+
+    const char *url = _url.c_str();
+    struct mg_str host = mg_url_host(url);
+    // If url is https://, tell client connection to use TLS
+    if (mg_url_is_ssl(url))
+    {
+        // struct mg_str key_data = mg_file_read(&mg_fs_posix, "tls/private-key.pem");
+        struct mg_tls_opts opts = {};
+#ifdef SKIP_SERVER_CERT_VERIFY                
+        opts.ca.ptr = nullptr; // disable certificate checking 
+#else
+        // certificates are loaded on initialization of the client in cross platform way.
+        opts.ca = ca;
+
+        // this is how to load the files rather than refer to them by name (for BUILT_IN tls)
+        // opts.cert = mg_file_read(&mg_fs_posix, "tls/cert.pem");
+        // opts.key = mg_file_read(&mg_fs_posix, "tls/private-key.pem");
+#endif
+        opts.name = host;
+        mg_tls_init(c, &opts);
+    }
+
+    // reset response status code
+    _status_code = -1;
+
+    // get authentication from url, if any provided
+    if (mg_url_user(url).len != 0)
+    {
+        struct mg_str u = mg_url_user(url);
+        struct mg_str p = mg_url_pass(url);
+        _username = std::string(u.ptr, u.len);
+        _password = std::string(p.ptr, p.len);
+    }
+
+    // Send request
+    switch(_method)
+    {
+        case HTTP_GET:
+        {
+            mg_printf(c, "GET %s HTTP/1.0\r\n"
+                            "Host: %.*s\r\n",
+                            mg_url_uri(url), (int)host.len, host.ptr);
+            // send auth header
+            if (!_username.empty())
+                mg_http_bauth(c, _username.c_str(), _password.c_str());
+            // send request headers
+            for (const auto& rh: _request_headers)
+                mg_printf(c, "%s: %s\r\n", rh.first.c_str(), rh.second.c_str());
+            mg_printf(c, "\r\n");
+            break;
+        }
+        case HTTP_PUT:
+        case HTTP_POST:
+        {
+            mg_printf(c, "%s %s HTTP/1.0\r\n"
+                            "Host: %.*s\r\n",
+                            (_method == HTTP_PUT) ? "PUT" : "POST",
+                            mg_url_uri(url), (int)host.len, host.ptr);
+            // send auth header
+            if (!_username.empty())
+                mg_http_bauth(c, _username.c_str(), _password.c_str());
+            // set Content-Type if not set
+            header_map_t::iterator it = _request_headers.find("Content-Type");
+            if (it == _request_headers.end())
+                set_header("Content-Type", "application/octet-stream");
+            // send request headers
+            for (const auto& rh: _request_headers)
+                mg_printf(c, "%s: %s\r\n", rh.first.c_str(), rh.second.c_str());
+#ifdef VERBOSE_HTTP
+            Debug_println("Custom headers");
+            for (const auto& rh: _request_headers)
+                Debug_printf("  %s: %s\n", rh.first.c_str(), rh.second.c_str());
+#endif
+            mg_printf(c, "Content-Length: %d\r\n", _post_datalen);
+            mg_printf(c, "\r\n");
+            mg_send(c, _post_data, _post_datalen);
+            break;
+        }
+        case HTTP_DELETE:
+        {
+            mg_printf(c, "DELETE %s HTTP/1.0\r\n"
+                            "Host: %.*s\r\n",
+                            mg_url_uri(url), (int)host.len, host.ptr);
+            // send auth header
+            if (!_username.empty())
+                mg_http_bauth(c, _username.c_str(), _password.c_str());
+            // send request headers
+            for (const auto& rh: _request_headers)
+                mg_printf(c, "%s: %s\r\n", rh.first.c_str(), rh.second.c_str());
+            mg_printf(c, "\r\n");
+            break;
+
+        }
+        default:
+        {
+#ifdef VERBOSE_HTTP
+            Debug_printf("mgHttpClient: method %d is not implemented\n", _method);
+#endif
+        }
+    }
+}
+
+void mgHttpClient::deepCopyHttpMessage(const struct mg_http_message *src, struct mg_http_message *dest) {
+    // First, shallow copy the entire struct to copy over the non-pointer fields
+    *dest = *src;
+
+    // Now, deep copy each mg_str field that contains a pointer
+    dest->method.ptr = util_strndup(src->method.ptr, src->method.len);
+    dest->uri.ptr = util_strndup(src->uri.ptr, src->uri.len);
+    dest->query.ptr = util_strndup(src->query.ptr, src->query.len);
+    dest->proto.ptr = util_strndup(src->proto.ptr, src->proto.len);
+    dest->body.ptr = util_strndup(src->body.ptr, src->body.len);
+    dest->head.ptr = util_strndup(src->head.ptr, src->head.len);
+    dest->message.ptr = util_strndup(src->message.ptr, src->message.len);
+
+    // Deep copy headers array
+    for (int i = 0; i < MG_MAX_HTTP_HEADERS && src->headers[i].name.len > 0; ++i) {
+        dest->headers[i].name.ptr = util_strndup(src->headers[i].name.ptr, src->headers[i].name.len);
+        dest->headers[i].value.ptr = util_strndup(src->headers[i].value.ptr, src->headers[i].value.len);
+    }
+}
+
+void mgHttpClient::freeHttpMessage(struct mg_http_message *msg) {
+    // Free each allocated string
+    free((void*)msg->method.ptr);
+    free((void*)msg->uri.ptr);
+    free((void*)msg->query.ptr);
+    free((void*)msg->proto.ptr);
+    free((void*)msg->body.ptr);
+    free((void*)msg->head.ptr);
+    free((void*)msg->message.ptr);
+
+    // Free headers
+    for (int i = 0; i < MG_MAX_HTTP_HEADERS && msg->headers[i].name.len > 0; ++i) {
+        free((void*)msg->headers[i].name.ptr);
+        free((void*)msg->headers[i].value.ptr);
+    }
+}
+
+void mgHttpClient::send_data(struct mg_http_message *hm, int status_code)
+{
+#ifdef VERBOSE_HTTP
+    Debug_printf("mgHttpClient: send_data\n");
+#endif
+
+    // get response status code and content length
+    _status_code = status_code;
+    _content_length = (int)hm->body.len;
+
+    if (_status_code == 301 || _status_code == 302)
+    {
+        // remember Location on redirect response
+        struct mg_str *loc = mg_http_get_header(hm, "Location");
+        if (loc != nullptr)
+            _location = std::string(loc->ptr, loc->len);
+    }
+
+    // get response headers client is interested in
+    size_t max_headers = sizeof(hm->headers) / sizeof(hm->headers[0]);
+    for (int i = 0; i < max_headers && hm->headers[i].name.len > 0; i++) 
+    {
+        // Check to see if we should store this response header
+        if (_stored_headers.size() <= 0)
+            break;
+
+        set_header_value(&hm->headers[i].name, &hm->headers[i].value);
+    }
+
+    // allocate buffer for received data
+    // realloc == malloc if first param is NULL
+    _buffer = (char *)realloc(_buffer, hm->body.len);
+
+    // copy received data into buffer
+    _buffer_pos = 0;
+    if (_buffer != nullptr) {
+        _buffer_len = hm->body.len;
+        memcpy(_buffer, hm->body.ptr, _buffer_len);
+    }
+    else {
+        _buffer_len = 0;
+        if (hm->body.len != 0) {
+            Debug_printf("mgHttpClient ERROR: buffer was not allocated for received data.");
+        }
+    }
+
+}
+
+void mgHttpClient::handle_http_msg(struct mg_connection *c, struct mg_http_message *hm)
+{
+#ifdef VERBOSE_HTTP
+    Debug_printf("mgHttpClient: handle_http_msg\n");
+    Debug_printf("  Status: %.*s\n", (int) hm->uri.len, hm->uri.ptr);
+    Debug_printf("  Received: %ld\n", (unsigned long) hm->message.len);
+    Debug_printf("  Body: %ld bytes\n", (unsigned long) hm->body.len);
+#endif
+
+    int status_code = std::stoi(std::string(hm->uri.ptr, hm->uri.len));
+    send_data(hm, status_code);
+
+    c->is_closing = 1;          // Tell mongoose to close this connection as it's completed
+    c->recv.len = 0;            // Reset the buffer to 0
+    _processed = true;    // Tell event loop to stop
+
+}
+
+void mgHttpClient::handle_read(struct mg_connection *c)
+{
+#ifdef VERBOSE_HTTP
+    Debug_printf("mgHttpClient: handle_read\n");
+#endif
+
+    struct mg_http_message hm;
+    int n = mg_http_parse((const char *) c->recv.buf, c->recv.len, &hm);
+    // Debug_printf("handle_read, n: %d, recv: %s, recv.len: %d, hm.body: >%s<, len: %d\n", n, c->recv.buf, c->recv.len, hm.body.ptr, hm.body.len);
+    if (hm.body.len == -1 && n > 0) {
+        // 1st block of chunked data, decode it. we abuse the string data as we'll empty it at the end anyway. sorry const
+        int decoded_len = process_chunked_data_in_place((char *) hm.body.ptr, c->recv.size);
+        if (decoded_len == 0) {
+            Debug_printf("mgHttpClient: no chunks in data, but also no content-length! quitting processing this as a block.\n");
+            return;
+        }
+
+        // looks like it was chunked data, so continue.
+        hm.body.len = decoded_len;
+        is_chunked = true;
+
+        // Debug_printf("[1] about to send '%s' [%d]\n", hm.body.ptr, hm.body.len);
+
+        // keep a copy of the http message for subsequent blocks, we will amend its data. we need the headers kept around
+        if (current_message != nullptr) {
+            freeHttpMessage(current_message);
+        }
+        current_message = (struct mg_http_message *) malloc(sizeof(struct mg_http_message));
+        deepCopyHttpMessage(&hm, current_message);
+
+        int status_code = std::stoi(std::string(current_message->uri.ptr, current_message->uri.len));
+        send_data(current_message, status_code);
+
+        // is this correct? we might get a small chunked block that is complete.
+        c->is_closing = 0;
+        c->recv.len = 0;
+        _processed = true;
+
+    }
+    else if (is_chunked) {
+        // subsequent chunked data without the http header, just the data
+        if (c->recv.len > 0) {
+            // Turn the recv buffer into a processable chunk by null terminating it. This stops the chunk processing from running into old data in case this isn't the last chunk.
+            c->recv.buf[c->recv.len] = '\0';
+        }
+
+        size_t new_len = process_chunked_data_in_place((char *) c->recv.buf, c->recv.size);
+
+        // Allocate or reallocate memory for current_message->body.ptr to hold the new data
+        char* new_body_ptr = (char*)realloc((void*)current_message->body.ptr, new_len);
+
+        // Since realloc might return a different pointer, update current_message->body.ptr
+        current_message->body.ptr = new_body_ptr;
+
+        // Copy the processed data into the newly allocated memory
+        memcpy((void*)current_message->body.ptr, c->recv.buf, new_len);
+
+        // Update current_message->body.len with the new length
+        current_message->body.len = new_len;
+
+        // Debug_printf("[2] about to send '%s' [%d]\n", current_message.body.ptr, current_message.body.len);
+        send_data(current_message, 200);
+
+        c->is_closing = c->recv.len == 0 ? 1 : 0;      // there's more data to get yet, so don't close until we have got the end of message, which is when recv.len is 0.
+        c->recv.len = 0;
+        // reset the buffer_total_read for this new block of data. If it's over the size that is subsequently requested, it'll come out of the buffer
+        _buffer_total_read = 0;
+        _processed = true;
+    }
+    else {
+#ifdef VERBOSE_HTTP
+        Debug_printf("mgHttpClient: handle_read ignoring this block\n");
+#endif
+    }
+
+}
+
+void report_unhandled(int ev)
+{
+#ifdef VERBOSE_HTTP
+    switch(ev)
+    {
+    case MG_EV_TLS_HS:
+        Debug_printf("mgHttpClient: TLS Handshake succeeded\n");
+        break;
+
+    case MG_EV_HTTP_HDRS:
+        Debug_printf("mgHttpClient: HTTP Headers received\n");
+        break;
+
+    case MG_EV_OPEN:
+        Debug_printf("mgHttpClient: Open received\n");
+        break;
+
+    case MG_EV_WRITE:
+        Debug_printf("mgHttpClient: Data written\n");
+        break;
+
+    case MG_EV_RESOLVE:
+        Debug_printf("mgHttpClient: Host name resolved\n");
+        break;
+
+    default:
+        Debug_printf("mgHttpClient: Unknown code: %d\n", ev);
+        break;
+
+    }
+#endif
 }
 
 /*
@@ -236,410 +659,57 @@ void mgHttpClient::close()
 
  The return value is discarded.
 */
-// esp_err_t mgHttpClient::_httpevent_handler(esp_http_client_event_t *evt)
-void mgHttpClient::_httpevent_handler(struct mg_connection *c, int ev, void *ev_data, void *user_data)
+void mgHttpClient::_httpevent_handler(struct mg_connection *c, int ev, void *ev_data)
 {
     // // Our user_data should be a pointer to our mgHttpClient object
-    // mgHttpClient *client = (mgHttpClient *)evt->user_data;
-    mgHttpClient *client = (mgHttpClient *)user_data;
+    mgHttpClient *client = (mgHttpClient *)c->fn_data;
     bool progress = true;
     
     switch (ev)
     {
     case MG_EV_CONNECT:
-    {
-#ifdef VERBOSE_HTTP
-        Debug_printf("mgHttpClient: Connected\n");
-#endif
-        // Connected to server.
-        // extract host name from URL
-        const char *url = client->_url.c_str();
-        struct mg_str host = mg_url_host(url);
-        // If url is https://, tell client connection to use TLS
-        if (mg_url_is_ssl(url))
-        {
-            struct mg_tls_opts opts = {};
-#ifdef SKIP_SERVER_CERT_VERIFY                
-            opts.ca = nullptr; // disable certificate checking 
-#else
-            opts.ca = "data/ca.pem";
-#endif
-            opts.srvname = host;
-            mg_tls_init(c, &opts);
-        }
-
-        // reset response status code
-        client->_status_code = -1;
-
-        // get authentication from url, if any provided
-        if (mg_url_user(url).len != 0)
-        {
-            struct mg_str u = mg_url_user(url);
-            struct mg_str p = mg_url_pass(url);
-            client->_username = std::string(u.ptr, u.len);
-            client->_password = std::string(p.ptr, p.len);
-        }
-
-        // Send request
-        switch(client->_method)
-        {
-            case HTTP_GET:
-            {
-                mg_printf(c, "GET %s HTTP/1.0\r\n"
-                                "Host: %.*s\r\n",
-                                mg_url_uri(url), (int)host.len, host.ptr);
-                // send auth header
-                if (!client->_username.empty())
-                    mg_http_bauth(c, client->_username.c_str(), client->_password.c_str());
-                // send request headers
-                for (const auto& rh: client->_request_headers)
-                    mg_printf(c, "%s: %s\r\n", rh.first.c_str(), rh.second.c_str());
-                mg_printf(c, "\r\n");
-                break;
-            }
-            case HTTP_PUT:
-            case HTTP_POST:
-            {
-                mg_printf(c, "%s %s HTTP/1.0\r\n"
-                                "Host: %.*s\r\n",
-                                (client->_method == HTTP_PUT) ? "PUT" : "POST",
-                                mg_url_uri(url), (int)host.len, host.ptr);
-                // send auth header
-                if (!client->_username.empty())
-                    mg_http_bauth(c, client->_username.c_str(), client->_password.c_str());
-                // set Content-Type if not set
-                header_map_t::iterator it = client->_request_headers.find("Content-Type");
-                if (it == client->_request_headers.end())
-                    client->set_header("Content-Type", "application/octet-stream");
-                // send request headers
-                for (const auto& rh: client->_request_headers)
-                    mg_printf(c, "%s: %s\r\n", rh.first.c_str(), rh.second.c_str());
-#ifdef VERBOSE_HTTP
-                Debug_println("Custom headers");
-                for (const auto& rh: client->_request_headers)
-                    Debug_printf("  %s: %s\n", rh.first.c_str(), rh.second.c_str());
-#endif
-                mg_printf(c, "Content-Length: %d\r\n", client->_post_datalen);
-                mg_printf(c, "\r\n");
-                mg_send(c, client->_post_data, client->_post_datalen);
-                break;
-            }
-            case HTTP_DELETE:
-            {
-                mg_printf(c, "DELETE %s HTTP/1.0\r\n"
-                                "Host: %.*s\r\n",
-                                mg_url_uri(url), (int)host.len, host.ptr);
-                // send auth header
-                if (!client->_username.empty())
-                    mg_http_bauth(c, client->_username.c_str(), client->_password.c_str());
-                // send request headers
-                for (const auto& rh: client->_request_headers)
-                    mg_printf(c, "%s: %s\r\n", rh.first.c_str(), rh.second.c_str());
-                mg_printf(c, "\r\n");
-                break;
-
-            }
-            default:
-            {
-#ifdef VERBOSE_HTTP
-                Debug_printf("mgHttpClient: method %d is not implemented\n", client->_method);
-#endif
-            }
-        }
+        client->handle_connect(c);
         break;
-    } // MG_EV_CONNECT
 
     case MG_EV_HTTP_MSG:
-    {
-        // Response received. Print it
-        struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-#ifdef VERBOSE_HTTP
-        Debug_printf("mgHttpClient: HTTP response\n");
-        Debug_printf("  Status: %.*s\n", (int)hm->uri.len, hm->uri.ptr);
-        Debug_printf("  Received: %lu\n", (unsigned long)hm->message.len);
-        // Debug_printf("Header0: %.*s = %.*s\n", (int)hm->headers[0].name.len, hm->headers[0].name.ptr, (int)hm->headers[0].value.len, hm->headers[0].value.ptr);
-        Debug_printf("  Body: %lu bytes\n", (unsigned long)hm->body.len);
-#endif
-
-        // get response status code and content length
-        client->_status_code = std::stoi(std::string(hm->uri.ptr, hm->uri.len));
-        client->_content_length = (int)hm->body.len;
-
-        if (client->_status_code == 301 || client->_status_code == 302)
-        {
-            // remember Location on redirect response
-            struct mg_str *loc = mg_http_get_header(hm, "Location");
-            if (loc != nullptr)
-                client->_location = std::string(loc->ptr, loc->len);
-        }
-
-        // get response headers client is interested in
-        size_t max_headers = sizeof(hm->headers) / sizeof(hm->headers[0]);
-        for (int i = 0; i < max_headers && hm->headers[i].name.len > 0; i++) 
-        {
-            // Check to see if we should store this response header
-            if (client->_stored_headers.size() <= 0)
-                break;
-
-            struct mg_str *name = &hm->headers[i].name;
-            struct mg_str *value = &hm->headers[i].value;
-            std::string hkey(std::string(name->ptr, name->len));
-            header_map_t::iterator it = client->_stored_headers.find(hkey);
-            if (it != client->_stored_headers.end())
-            {
-                std::string hval(std::string(value->ptr, value->len));
-                it->second = hval;
-            }
-        }
-
-        // allocate buffer for received data
-        if (client->_buffer != nullptr) 
-        {
-            // new buffer needed after redirect
-#ifdef VERBOSE_HTTP
-            Debug_printf("    buffer realloc(%d)\n", hm->body.len);
-#endif
-            client->_buffer = (char *)realloc(client->_buffer, hm->body.len);
-        }
-        else {
-#ifdef VERBOSE_HTTP
-            Debug_printf("    buffer malloc(%d)\n", hm->body.len);
-#endif
-            client->_buffer = (char *)malloc(hm->body.len);
-        }
-        // copy received data into buffer
-        client->_buffer_pos = 0;
-        if (client->_buffer != nullptr) {
-            client->_buffer_len = hm->body.len;
-            memcpy(client->_buffer, hm->body.ptr, client->_buffer_len);
-        }
-        else {
-            client->_buffer_len = 0;
-            if (hm->body.len != 0) {
-                Debug_printf("mgHttpClient buffer not allocated!");
-            }
-        }
-
-        c->is_closing = 1;          // Tell mongoose to close this connection
-        client->_processed = true;  // Tell event loop to stop
+        client->handle_http_msg(c, (struct mg_http_message *) ev_data);
         break;
-    }
-
-    case MG_EV_HTTP_CHUNK:
-    {
-#ifdef VERBOSE_HTTP
-        Debug_printf("mgHttpClient: HTTP chunk (partial msg)\n");
-#endif
-        break;
-    }
 
     case MG_EV_READ:
-    {
-#ifdef VERBOSE_HTTP
-        Debug_printf("mgHttpClient: Data received\n");
-#endif
+        client->handle_read(c);
         break;
-    }
-    
-    case MG_EV_WRITE:
-    {
-#ifdef VERBOSE_HTTP
-        Debug_printf("mgHttpClient: Data written\n");
-#endif
-        break;
-    }
-    
+
     case MG_EV_CLOSE:
-    {
 #ifdef VERBOSE_HTTP
         Debug_printf("mgHttpClient: Connection closed\n");
 #endif
+        client->_transaction_done = true;
+        client->is_chunked = false;
         break;
-    }
-    
-    case MG_EV_RESOLVE:
-    {
-#ifdef VERBOSE_HTTP
-        Debug_printf("mgHttpClient: Host name resolved\n");
-#endif
-        break;
-    }
     
     case MG_EV_ERROR:
-    {
         Debug_printf("mgHttpClient: Error - %s\n", (const char*)ev_data);
+        client->_transaction_done = true;
         client->_processed = true;  // Error, tell event loop to stop
         client->_status_code = 901; // Fake HTTP status code to indicate connection error
         break;
-    }
     
     case MG_EV_POLL:
-    {
         progress = false;
         break;
-    }
     
     default:
-    {
-#ifdef VERBOSE_HTTP
-        Debug_printf("mgHttpClient event: %d\n", ev);
-#endif
+        report_unhandled(ev);
         break;
-    }
+
     }
 
     client->_progressed = progress;
 
-    // switch (evt->event_id)
-    // {
-    // case HTTP_EVENT_ERROR: // This event occurs when there are any errors during execution
-    //     //Debug_printf("HTTP_EVENT_ERROR %u\n", uxTaskGetStackHighWaterMark(nullptr));
-    //     break;
-    // case HTTP_EVENT_ON_CONNECTED: // Once the HTTP has been connected to the server, no data exchange has been performed
-    //     //Debug_printf("HTTP_EVENT_ON_CONNECTED %u\n", uxTaskGetStackHighWaterMark(nullptr));
-    //     client->connected = true;
-    //     break;
-    // case HTTP_EVENT_HEADER_SENT: // After sending all the headers to the server
-    //     //Debug_printf("HTTP_EVENT_HEADER_SENT %u\n", uxTaskGetStackHighWaterMark(nullptr));
-    //     break;
-
-    // case HTTP_EVENT_ON_HEADER: // Occurs when receiving each header sent from the server
-    // {
-    //     //Debug_printf("HTTP_EVENT_ON_HEADER %u\n", uxTaskGetStackHighWaterMark(nullptr));
-    //     // Check to see if we should store this response header
-    //     if (client->_stored_headers.size() <= 0)
-    //         break;
-
-    //     std::string hkey(evt->header_key);
-    //     header_map_t::iterator it = client->_stored_headers.find(hkey);
-    //     if (it != client->_stored_headers.end())
-    //     {
-    //         std::string hval(evt->header_value);
-    //         it->second = hval;
-    //     }
-    //     break;
-    // }
-    // case HTTP_EVENT_ON_DATA: // Occurs multiple times when receiving body data from the server. MAY BE SKIPPED IF BODY IS EMPTY!
-    // {
-    //     //Debug_printf("HTTP_EVENT_ON_DATA %u\n", uxTaskGetStackHighWaterMark(nullptr));
-
-    //     // Don't do any of this if we're told to ignore the response
-    //     if (client->_ignore_response_body == true)
-    //         break;
-
-    //     // esp_http_client will automatically retry redirects, so ignore all but the last attemp
-    //     int status = esp_http_client_get_status_code(client->_handle);
-    //     if ((status == HttpStatus_Found || status == HttpStatus_MovedPermanently) && client->_redirect_count < (client->_max_redirects - 1))
-    //     {
-    //         //Debug_println("Ignoring redirect response");
-    //         break;
-    //     }
-    //     /*
-    //      If auth type is set to NONE, esp_http_client will automatically retry auth failures by attempting to set the auth type to
-    //      BASIC or DIGEST depending on the server response code. Ignore this attempt.
-    //     */
-    //     if (status == HttpStatus_Unauthorized && client->_auth_type == HTTP_AUTH_TYPE_NONE && client->_redirect_count == 0)
-    //     {
-    //         //Debug_println("Ignoring UNAUTHORIZED response");
-    //         break;
-    //     }
-
-    //     // Check if this is our first time this event has been triggered
-    //     if (client->_transaction_begin == true)
-    //     {
-    //         client->_transaction_begin = false;
-    //         client->_transaction_done = false;
-    //         // Let the main thread know we're done reading headers and have moved on to the data
-    //         xTaskNotifyGive(client->_taskh_consumer);
-    //     }
-
-    //     // Wait to be told we can fill the buffer
-    //     //Debug_println("Waiting to start reading");
-    //     ulTaskNotifyTake(1, pdMS_TO_TICKS(HTTPCLIENT_WAIT_FOR_CONSUMER_TASK));
-
-    //     //Debug_printf("HTTP_EVENT_ON_DATA Data: %p, Datalen: %d\n", evt->data, evt->data_len);
-
-    //     client->_buffer_pos = 0;
-    //     client->_buffer_len = (evt->data_len > DEFAULT_HTTP_BUF_SIZE) ? DEFAULT_HTTP_BUF_SIZE : evt->data_len;
-    //     memcpy(client->_buffer, evt->data, client->_buffer_len);
-
-    //     // Now let the reader know there's data in the buffer
-    //     xTaskNotifyGive(client->_taskh_consumer);
-    //     break;
-    // }
-
-    // case HTTP_EVENT_ON_FINISH: // Occurs when finish a HTTP session
-    // {
-    //     // This may get called more than once if esp_http_client decides to retry in order to handle a redirect or auth response
-    //     //Debug_printf("HTTP_EVENT_ON_FINISH %u\n", uxTaskGetStackHighWaterMark(nullptr));
-    //     // Keep track of how many times we "finish" reading a response from the server
-    //     client->_redirect_count++;
-    //     break;
-    // }
-
-    // case HTTP_EVENT_DISCONNECTED: // The connection has been disconnected
-    //     client->connected = false;
-    //     //Debug_printf("HTTP_EVENT_DISCONNECTED %p:\"%s\":%u\n", xTaskGetCurrentTaskHandle(), pcTaskGetTaskName(nullptr), uxTaskGetStackHighWaterMark(nullptr));
-    //     break;
-    // }
-    // return ESP_OK;
 }
 
-// void mgHttpClient::_perform_subtask(void *param)
-// {
-//     mgHttpClient *parent = (mgHttpClient *)param;
-
-//     // Reset our transaction state markers
-//     parent->_transaction_begin = true;
-//     parent->_transaction_done = false;
-//     parent->_redirect_count = 0;
-//     parent->_buffer_len = 0;
-
-//     //Debug_printf("esp_http_client_perform start\n");
-
-//     esp_err_t e = esp_http_client_perform(parent->_handle);
-//     __IGNORE_UNUSED_VAR(e);
-
-//     //Debug_printf("esp_http_client_perform returned %d, stack HWM %u\n", e, uxTaskGetStackHighWaterMark(nullptr));
-
-//     // Indicate there's nothing else to read
-//     parent->_transaction_done = true;
-
-//     // Don't send notifications if we're ignoring the response body
-//     if (false == parent->_ignore_response_body)
-//     {
-//         /*
-//          If _transaction_begin is false, then we handled the HTTP_EVENT_ON_DATA event, and 
-//          read() has sent us a notification we need to accept before continuing.
-//         */
-//         if (false == parent->_transaction_begin)
-//             ulTaskNotifyTake(1, pdMS_TO_TICKS(HTTPCLIENT_WAIT_FOR_CONSUMER_TASK));
-
-//         /*
-//          If we handled the HTTP_EVENT_ON_DATA event, then read() is waiting for a notification.
-//          If we didn't handle that event, then _perform() is waiting for a notification.
-//          Notify whichever of the two that they can continue.
-//         */
-//         xTaskNotifyGive(parent->_taskh_consumer);
-//     }
-
-//     //Debug_println("_perform_subtask_exiting");
-//     TaskHandle_t tmp = parent->_taskh_subtask;
-//     parent->_taskh_subtask = nullptr;
-//     vTaskDelete(tmp);
-// }
-
-// void mgHttpClient::_delete_subtask_if_running()
-// {
-//     if (_taskh_subtask != nullptr)
-//     {
-//         vTaskDelete(_taskh_subtask);
-//         _taskh_subtask = nullptr;
-//     }
-// }
-
 /*
- Performs an HTTP transaction using esp_http_client_perform()
+ Performs an HTTP transaction
  Outside of POST data, this can't write to the server.  However, it's the only way to
  retrieve response headers using the esp_http_client library, so we use it
  for all non-write methods: GET, HEAD, POST
@@ -657,8 +727,10 @@ int mgHttpClient::_perform()
     bool done = false;
 
     uint64_t ms_update = fnSystem.millis();
-    // create client connection
-    _perform_connect();
+    // create client connection if this is a new request. If we were in the middle of processing chunks, we don't redo it.
+    if (_transaction_done) {
+        _perform_connect();
+    }
 
     while (!done)
     {
@@ -682,7 +754,7 @@ int mgHttpClient::_perform()
             Debug_printf("Timed-out waiting for HTTP response\n");
             _status_code = 408; // 408 Request Timeout
         }
-        // request/response processing done
+
         done = true;
 
         // check the response
@@ -716,32 +788,10 @@ int mgHttpClient::_perform()
         }
     }
 
-    // // Handle the that HTTP task will use to notify us
-    // _taskh_consumer = xTaskGetCurrentTaskHandle();
-
-    // // Start a new task to perform the http client work
-    // _delete_subtask_if_running();
-    // xTaskCreate(_perform_subtask, "perform_subtask", 4096, this, 5, &_taskh_subtask);
-    // //Debug_printf("%08lx _perform subtask created\n", fnSystem.millis());
-
-    // // Wait until we have headers returned
-    // if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(HTTPCLIENT_WAIT_FOR_HTTP_TASK)) == 0)
-    // {
-    //     Debug_printf("Timed-out waiting for headers to load\n");
-    //     //_delete_subtask_if_running();
-    //     return -1;
-    // }
-    //Debug_printf("%08lx _perform notified\n", fnSystem.millis());
-    //Debug_printf("Notification of headers loaded\n");
-
-    // bool chunked = esp_http_client_is_chunked_response(_handle);
-    // int status = esp_http_client_get_status_code(_handle);
-    // int length = esp_http_client_get_content_length(_handle);
-    bool chunked = false; // TODO
     int status = _status_code;
     int length = _content_length;
 
-    Debug_printf("%08lx _perform status = %d, length = %d, chunked = %d\n", (unsigned long)fnSystem.millis(), status, length, chunked ? 1 : 0);
+    Debug_printf("%08lx _perform status = %d, length = %d, chunked = %d\n", (unsigned long)fnSystem.millis(), status, length, is_chunked ? 1 : 0);
     return status;
 }
 
@@ -758,78 +808,6 @@ void mgHttpClient::_perform_connect()
     mg_http_connect(_handle, _url.c_str(), _httpevent_handler, this);  // Create client connection
 }
 
-/*
- Performs an HTTP transaction using esp_http_client_open() and subsequent "streaming" functions.
- Although this is more flexible than the esp_http_client_perform() method, there doesn't
- seem to be a way of retrieving response headers from the server this way.  So we only use
- it for write-focused methods: PUT and arbitrary methods specified using send_request()
-*/
-// int mgHttpClient::_perform_stream(esp_http_client_method_t method, uint8_t *write_data, int write_size)
-// {
-//     Debug_printf("%08lx _perform_stream\n", fnSystem.millis());
-
-//     if (_handle == nullptr)
-//         return -1;
-
-//     /* Headers added by HttpClient
-//         <METHOD> <URI> HTTP/1.1
-//         Host: <HOST>
-//         User-Agent: <UserAgent>
-//         Connection: <keep-alive/close>
-//         Accept-Encoding: <encoding>
-//         Authorization: Basic <authorization>
-//     */
-
-//     // Set method
-//     esp_err_t e = esp_http_client_set_method(_handle, method);
-
-//     // Add header specifying expected content size
-//     if (write_data != nullptr && write_size > 0)
-//     {
-//         char buff[12];
-//         __itoa(write_size, buff, 10);
-//         set_header("Content-Length", buff);
-//     }
-
-//     Debug_printf("%08lx _perform_write open+write\n", fnSystem.millis());
-//     e = esp_http_client_open(_handle, write_size);
-//     if (e != ESP_OK)
-//     {
-//         Debug_printf("_perform_write error %d during open\n", e);
-//         return -1;
-//     }
-
-//     e = esp_http_client_write(_handle, (char *)write_data, write_size);
-//     if (e < 0)
-//     {
-//         Debug_printf("_perform_write error during write\n");
-//         return -1;
-//     }
-
-//     e = esp_http_client_fetch_headers(_handle);
-//     if (e < 0)
-//     {
-//         Debug_printf("_perform_write error during fetch headers\n");
-//         return -1;
-//     }
-
-//     // Collect results
-//     bool chunked = esp_http_client_is_chunked_response(_handle);
-//     int status = esp_http_client_get_status_code(_handle);
-//     int length = esp_http_client_get_content_length(_handle);
-//     Debug_printf("status = %d, length = %d, chunked = %d\n", status, length, chunked ? 1 : 0);
-
-//     // Read any returned data
-//     int r = esp_http_client_read(_handle, _buffer, DEFAULT_HTTP_BUF_SIZE);
-//     if (r > 0)
-//     {
-//         _buffer_len = r;
-//         Debug_printf("_perform_write read %d bytes\n", r);
-//     }
-
-//     return status;
-// }
-
 int mgHttpClient::PUT(const char *put_data, int put_datalen)
 {
     Debug_println("mgHttpClient::PUT");
@@ -837,20 +815,7 @@ int mgHttpClient::PUT(const char *put_data, int put_datalen)
     if (_handle == nullptr || put_data == nullptr || put_datalen < 1)
         return -1;
 
-    // // Get rid of any pending data
-    // _flush_response();
-
-    // // Set method
-    // esp_http_client_set_method(_handle, esp_http_client_method_t::HTTP_METHOD_PUT);
     _method = HTTP_PUT;
-    // // See if a content-type has been set and set a default one if not
-    // // Call this before esp_http_client_set_post_field() otherwise that function will definitely set the content type to form
-    // char *value = nullptr;
-    // esp_http_client_get_header(_handle, "Content-Type", &value);
-    // if (value == nullptr)
-    //     esp_http_client_set_header(_handle, "Content-Type", "application/octet-stream");
-    // // esp_http_client_set_post_field() sets the content of the body of the transaction
-    // esp_http_client_set_post_field(_handle, put_data, put_datalen);
     _post_data = put_data;
     _post_datalen = put_datalen;
 
@@ -863,26 +828,7 @@ int mgHttpClient::PROPFIND(webdav_depth depth, const char *properties_xml)
     if (_handle == nullptr)
         return -1;
 
-    // // Get rid of any pending data
-    // _flush_response();
-
-    // // Set method
-    // esp_http_client_set_method(_handle, esp_http_client_method_t::HTTP_METHOD_PROPFIND);
     _method = HTTP_PROPFIND;
-    // // Assume any request body will be XML
-    // esp_http_client_set_header(_handle, "Content-Type", "text/xml");
-    // // Set depth
-    // const char *pDepth = webdav_depths[0];
-    // if (depth == DEPTH_1)
-    //     pDepth = webdav_depths[1];
-    // else if (depth == DEPTH_INFINITY)
-    //     pDepth = webdav_depths[2];
-    // esp_http_client_set_header(_handle, "Depth", pDepth);
-
-    // // esp_http_client_set_post_field() sets the content of the body of the transaction
-    // if (properties_xml != nullptr)
-    //     esp_http_client_set_post_field(_handle, properties_xml, strlen(properties_xml));
-
     return _perform();
 }
 
@@ -892,13 +838,7 @@ int mgHttpClient::DELETE()
     if (_handle == nullptr)
         return -1;
 
-    // // Get rid of any pending data
-    // _flush_response();
-
-    // // Set method
-    // esp_http_client_set_method(_handle, esp_http_client_method_t::HTTP_METHOD_DELETE);
     _method = HTTP_DELETE;
-
     return _perform();
 }
 
@@ -908,13 +848,7 @@ int mgHttpClient::MKCOL()
     if (_handle == nullptr)
         return -1;
 
-    // // Get rid of any pending data
-    // _flush_response();
-
-    // // Set method
-    // esp_http_client_set_method(_handle, esp_http_client_method_t::HTTP_METHOD_MKCOL);
     _method = HTTP_MKCOL;
-
     return _perform();
 }
 
@@ -924,17 +858,7 @@ int mgHttpClient::COPY(const char *destination, bool overwrite, bool move)
     if (_handle == nullptr || destination == nullptr)
         return -1;
 
-    // // Get rid of any pending data
-    // _flush_response();
-
-    // // Set method
-    // esp_http_client_set_method(_handle, move ? esp_http_client_method_t::HTTP_METHOD_MOVE : esp_http_client_method_t::HTTP_METHOD_COPY);
     _method = HTTP_MOVE;
-    // // Set detination
-    // esp_http_client_set_header(_handle, "Destination", destination);
-    // // Set overwrite
-    // esp_http_client_set_header(_handle, "Overwrite", overwrite ? "T" : "F");
-
     return _perform();
 }
 
@@ -957,12 +881,6 @@ int mgHttpClient::POST(const char *post_data, int post_datalen)
     if (_handle == nullptr || post_data == nullptr || post_datalen < 1)
         return -1;
 
-    // // Get rid of any pending data
-    // _flush_response();
-
-    // // Set method
-    // esp_http_client_set_method(_handle, esp_http_client_method_t::HTTP_METHOD_POST);
-    // esp_http_client_set_post_field(_handle, post_data, post_datalen);
     _method = HTTP_POST;
     _post_data = post_data;
     _post_datalen = post_datalen;
@@ -977,29 +895,13 @@ int mgHttpClient::GET()
     if (_handle == nullptr)
         return -1;
 
-    // // Get rid of any pending data
-    // _flush_response();
-
-    // // Set method
-    // esp_http_client_set_method(_handle, esp_http_client_method_t::HTTP_METHOD_GET);
     _method = HTTP_GET;
-
     return _perform();
 }
 
 int mgHttpClient::HEAD()
 {
-    // Debug_println("mgHttpClient::HEAD");
-    // if (_handle == nullptr)
-    //     return -1;
-
-    // // Get rid of any pending data
-    // _flush_response();
-
-    // // Set method
-    // esp_http_client_set_method(_handle, esp_http_client_method_t::HTTP_METHOD_HEAD);
     _method = HTTP_HEAD;
-
     return _perform();
 }
 
@@ -1010,7 +912,6 @@ bool mgHttpClient::set_url(const char *url)
     if (_handle == nullptr)
         return false;
 
-    // return ESP_OK == esp_http_client_set_url(_handle, url);
     return true;
 }
 
@@ -1023,12 +924,6 @@ bool mgHttpClient::set_header(const char *header_key, const char *header_value)
     if (_request_headers.size() >= 20)
         return false;
 
-    // esp_err_t e = esp_http_client_set_header(_handle, header_key, header_value);
-    // if (e != ESP_OK)
-    // {
-    //     Debug_printf("mgHttpClient::set_header error %d\n", e);
-    //     return false;
-    // }
     _request_headers[header_key] = header_value;
     return true;
 }
@@ -1062,10 +957,10 @@ const std::string mgHttpClient::get_header(int index)
     return vi->second;
 }
 
-// Returns value of requested response header or nullptr if there is no match
+// Returns value of requested response header or empty string if there is no match
 const std::string mgHttpClient::get_header(const char *header)
 {
-    std::string hkey(header);
+    std::string hkey = util_tolower(header);
     header_map_t::iterator it = _stored_headers.find(hkey);
     if (it != _stored_headers.end())
         return it->second;
@@ -1081,8 +976,95 @@ void mgHttpClient::collect_headers(const char *headerKeys[], const size_t header
     // Clear out the current headers
     _stored_headers.clear();
 
-    for (int i = 0; i < headerKeysCount; i++)
-        _stored_headers.insert(header_entry_t(headerKeys[i], std::string()));
+    for (int i = 0; i < headerKeysCount; i++) {
+        std::string lower_key = util_tolower(headerKeys[i]);
+        _stored_headers.insert(header_entry_t(lower_key, std::string()));
+    }
+}
+
+// Sets the header's value in the map if found (case insensitive)
+void mgHttpClient::set_header_value(const struct mg_str *name, const struct mg_str *value)
+{
+    std::string hkey = util_tolower(std::string(name->ptr, name->len));
+    header_map_t::iterator it = _stored_headers.find(hkey);
+    if (it != _stored_headers.end())
+    {
+        std::string hval(std::string(value->ptr, value->len));
+        it->second = hval;
+    }
+}
+
+/*
+ * Replaces a piece of chunked html (with size and data) with just the data.
+ * Works for multiple blocks.
+ * Also ignores any CHUNK EXTENSIONS, e.g. D;foo=bar;baz;qux=123\r\n
+ * 
+ * Data is only changed if any valid chunk blocks are detected within the upper_bound size given.
+ * If none are found, 0 is returned and data is untouched.
+ * 
+ */
+size_t mgHttpClient::process_chunked_data_in_place(char* data, size_t upper_bound) {
+    if (!std::isxdigit(data[0])) {
+        return 0; // Not chunk-encoded data
+    }
+
+    std::string decoded_data; // Accumulate decoded chunks here
+    char* input_ptr = data;
+    size_t processed_length = 0; // Track how much of the input we have processed
+
+    while (processed_length < upper_bound) {
+        char* end_of_chunk_size_line = strstr(input_ptr, "\r\n");
+        if (!end_of_chunk_size_line) {
+            // No complete chunk size line found
+            break; // Stop processing, but keep valid chunks processed so far
+        }
+
+        char* semicolon_pos = strchr(input_ptr, ';');
+        if (semicolon_pos && semicolon_pos < end_of_chunk_size_line) {
+            *semicolon_pos = '\0'; // Ignore extensions for simplicity
+        } else {
+            *end_of_chunk_size_line = '\0';
+        }
+
+        unsigned int chunk_size;
+        if (sscanf(input_ptr, "%x", &chunk_size) != 1) {
+            // Failed to parse chunk size
+            break; // Stop processing, but keep valid chunks processed so far
+        }
+
+        // Restore the modified character
+        if (semicolon_pos && semicolon_pos < end_of_chunk_size_line) {
+            *semicolon_pos = ';';
+        } else {
+            *end_of_chunk_size_line = '\r';
+        }
+
+        if (chunk_size == 0) {
+            // This is the last chunk
+            break;
+        }
+
+        input_ptr = end_of_chunk_size_line + 2; // Move past the chunk size line
+        processed_length += (input_ptr - data); // Update processed length
+
+        if (processed_length + chunk_size + 2 > upper_bound || strncmp(input_ptr + chunk_size, "\r\n", 2) != 0) {
+            // No end of chunk marker or chunk data exceeds buffer
+            break; // Stop processing, but keep valid chunks processed so far
+        }
+
+        decoded_data.append(input_ptr, chunk_size); // Add chunk data to decoded_data
+        input_ptr += chunk_size + 2; // Move to the next chunk
+        processed_length += chunk_size + 2; // Update processed length
+    }
+
+    if (!decoded_data.empty()) {
+        // Replace the original buffer with the accumulated decoded data
+        memcpy(data, decoded_data.c_str(), decoded_data.size());
+        data[decoded_data.size()] = '\0'; // Null-terminate the result
+        return decoded_data.size(); // Return the length of the decoded data
+    }
+
+    return 0; // No valid chunks were processed
 }
 
 #endif // !ESP_PLATFORM

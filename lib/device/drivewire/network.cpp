@@ -115,6 +115,11 @@ void drivewireNetwork::timer_stop()
 
 /** DRIVEWIRE COMMANDS ***************************************************************/
 
+void drivewireNetwork::ready()
+{
+    fnUartBUS.write(0x01); // yes, ready.
+}
+
 /**
  * DRIVEWIRE Open command
  * Called in response to 'O' command. Instantiate a protocol, pass URL to it, call its open
@@ -169,7 +174,7 @@ void drivewireNetwork::open()
             delete protocolParser;
             protocolParser = nullptr;
         }
-        fnUartBUS.write(ns.error);
+        //fnUartBUS.write(ns.error);
         return;
     }
 
@@ -185,7 +190,7 @@ void drivewireNetwork::open()
             delete protocolParser;
             protocolParser = nullptr;
         }
-        fnUartBUS.write(ns.error);
+        //fnUartBUS.write(ns.error);
         return;
     }
 
@@ -202,7 +207,9 @@ void drivewireNetwork::open()
     channelMode = PROTOCOL;
 
     // And signal complete!
-    fnUartBUS.write(ns.error);
+    ns.error = 1;
+    //fnUartBUS.write(ns.error);
+    Debug_printf("ns.error = %u\n",ns.error);
 }
 
 /**
@@ -224,7 +231,7 @@ void drivewireNetwork::close()
     // If no protocol enabled, we just signal complete, and return.
     if (protocol == nullptr)
     {
-        fnUartBUS.write(ns.error);
+        //fnUartBUS.write(ns.error);
         return;
     }
 
@@ -248,7 +255,7 @@ void drivewireNetwork::close()
     Debug_printv("After protocol delete %lu\n",esp_get_free_internal_heap_size());
 #endif
     
-    fnUartBUS.write(ns.error);
+    //fnUartBUS.write(ns.error);
 }
 
 /**
@@ -260,7 +267,15 @@ void drivewireNetwork::close()
  */
 void drivewireNetwork::read()
 {
-    uint16_t num_bytes = get_daux();
+    uint8_t num_bytesh = cmdFrame.aux1;
+    uint8_t num_bytesl = cmdFrame.aux2;
+    uint16_t num_bytes = (num_bytesh * 256) + num_bytesl;
+
+    if (!num_bytes)
+    {
+        Debug_printf("drivewireNetwork::read() - Zero bytes requested. Bailing.\n");
+        return;
+    }
 
     Debug_printf("drivewireNetwork::read( %u bytes)\n", num_bytes);
 
@@ -268,7 +283,6 @@ void drivewireNetwork::read()
     if (receiveBuffer == nullptr)
     {
         ns.error = NETWORK_ERROR_COULD_NOT_ALLOCATE_BUFFERS;
-        fnUartBUS.write(ns.error);
         return;
     }
 
@@ -282,18 +296,14 @@ void drivewireNetwork::read()
         }
 
         ns.error = NETWORK_ERROR_NOT_CONNECTED;
-        fnUartBUS.write(ns.error);
         return;
     }
 
     // Do the channel read
     read_channel(num_bytes);
 
-    // Write error code
-    fnUartBUS.write(ns.error);
-
-    // And send off buffer to computer
-    fnUartBUS.write((uint8_t *)receiveBuffer->data(), num_bytes);
+    // And set response buffer.
+    response += *receiveBuffer;
  
     // Remove from receive buffer and shrink.
     receiveBuffer->erase(0, num_bytes);
@@ -343,6 +353,28 @@ bool drivewireNetwork::read_channel(unsigned short num_bytes)
 void drivewireNetwork::write()
 {
     uint16_t num_bytes = get_daux();
+    char *txbuf=nullptr;
+
+    if (!num_bytes)
+    {
+        Debug_printf("drivewireNetwork::write() - refusing to write 0 bytes.\n");
+        return;
+    }
+
+    txbuf=(char *)malloc(num_bytes);
+
+    if (!txbuf)
+    {
+        Debug_printf("drivewireNetwork::write() - could not allocate %u bytes.\n");
+        return;
+    }
+
+    if (fnUartBUS.readBytes(txbuf,num_bytes) < num_bytes)
+    {
+        Debug_printf("drivewireNetwork::write() - short read\n");
+        free(txbuf);
+        return;
+    }
 
     Debug_printf("sioNetwork::drivewire_write( %u bytes)\n", num_bytes);
 
@@ -355,18 +387,17 @@ void drivewireNetwork::write()
             protocolParser = nullptr;
         }
         ns.error = NETWORK_ERROR_NOT_CONNECTED;
-        fnUartBUS.write(ns.error);
         return;
     }
 
-    // Get the data from the Atari
-    while (fnUartBUS.available())
-        *transmitBuffer += fnUartBUS.read();
+    std::string s = std::string(txbuf,num_bytes);
+
+    *transmitBuffer += s;
+
+    free(txbuf);
 
     // Do the channel write
     write_channel(num_bytes);
-
-    fnUartBUS.write(ns.error);
 }
 
 /**
@@ -425,25 +456,31 @@ void drivewireNetwork::status_local()
     {
     case 1: // IP Address
         Debug_printf("IP Address: %u.%u.%u.%u\n", ipAddress[0], ipAddress[1], ipAddress[2], ipAddress[3]);
-        fnUartBUS.write(ipAddress,sizeof(ipAddress));
+        memcpy(default_status,ipAddress,sizeof(default_status));
         break;
     case 2: // Netmask
         Debug_printf("Netmask: %u.%u.%u.%u\n", ipNetmask[0], ipNetmask[1], ipNetmask[2], ipNetmask[3]);
-        fnUartBUS.write(ipNetmask,sizeof(ipNetmask));
+        memcpy(default_status,ipNetmask,sizeof(default_status));
         break;
     case 3: // Gatway
         Debug_printf("Gateway: %u.%u.%u.%u\n", ipGateway[0], ipGateway[1], ipGateway[2], ipGateway[3]);
-        fnUartBUS.write(ipGateway,sizeof(ipGateway));
+        memcpy(default_status,ipGateway,sizeof(default_status));
         break;
     case 4: // DNS
         Debug_printf("DNS: %u.%u.%u.%u\n", ipDNS[0], ipDNS[1], ipDNS[2], ipDNS[3]);
-        fnUartBUS.write(ipDNS,sizeof(ipDNS));
+        memcpy(default_status,ipDNS,sizeof(default_status));
         break;
     default:
         default_status[2] = ns.connected;
         default_status[3] = ns.error;
-        fnUartBUS.write(default_status,sizeof(default_status));
+        break;
     }
+
+    response.clear();
+    response += default_status[0];
+    response += default_status[1];
+    response += default_status[2];
+    response += default_status[3];
 }
 
 bool drivewireNetwork::status_channel_json(NetworkStatus *ns)
@@ -460,14 +497,13 @@ bool drivewireNetwork::status_channel_json(NetworkStatus *ns)
 void drivewireNetwork::status_channel()
 {
     uint8_t serialized_status[4] = {0, 0, 0, 0};
-    bool err = false;
 
     Debug_printf("drivewireNetwork::sio_status_channel(%u)\n", channelMode);
 
     switch (channelMode)
     {
     case PROTOCOL:
-        err = protocol->status(&ns);
+        protocol->status(&ns);
         break;
     case JSON:
         status_channel_json(&ns);
@@ -485,8 +521,15 @@ void drivewireNetwork::status_channel()
     Debug_printf("sio_status_channel() - BW: %u C: %u E: %u\n",
                  ns.rxBytesWaiting, ns.connected, ns.error);
 
-    // and send to computer
-    fnUartBUS.write(serialized_status, sizeof(serialized_status));
+    Debug_printf("%02X %02X %02X %02X\n",serialized_status[0],serialized_status[1],serialized_status[2],serialized_status[3]);
+
+    // and fill response.
+    response.clear();
+    response.shrink_to_fit();
+    response += serialized_status[0];
+    response += serialized_status[1];
+    response += serialized_status[2];
+    response += serialized_status[3];
 }
 
 /**
@@ -580,7 +623,7 @@ void drivewireNetwork::set_prefix()
  */
 void drivewireNetwork::set_channel_mode()
 {
-    switch (cmdFrame.aux2)
+    switch (cmdFrame.aux1)
     {
     case 0:
         channelMode = PROTOCOL;
@@ -591,6 +634,8 @@ void drivewireNetwork::set_channel_mode()
     default:
         break;
     }
+
+    Debug_printv("channel mode now %u\n",channelMode);
 }
 
 /**
@@ -744,7 +789,6 @@ void drivewireNetwork::special_00()
         protocol->special_00(&cmdFrame);
     }
 
-    fnUartBUS.write(ns.error);
 }
 
 /**
@@ -815,7 +859,6 @@ void drivewireNetwork::special_80()
     protocol->special_80(spData, SPECIAL_BUFFER_SIZE, &cmdFrame);
 
     protocol->status(&ns);
-    fnUartBUS.write(ns.error);
 }
 
 /** PRIVATE METHODS ************************************************************/
@@ -944,6 +987,22 @@ void drivewireNetwork::poll_interrupt()
     }
 }
 
+void drivewireNetwork::send_error()
+{
+    Debug_printf("drivewireNetwork::send_error(%u)\n",ns.error);
+    fnUartBUS.write(ns.error);
+}
+
+void drivewireNetwork::send_response()
+{
+    // Send body
+    fnUartBUS.write((uint8_t *)response.c_str(),response.length());
+
+    // Clear the response
+    response.clear();
+    response.shrink_to_fit();
+}
+
 /**
  * Preprocess deviceSpec given aux1 open mode. This is used to work around various assumptions that different
  * disk utility packages do when opening a device, such as adding wildcards for directory opens.
@@ -975,7 +1034,6 @@ void drivewireNetwork::parse_and_instantiate_protocol()
     {
         Debug_printf("Invalid devicespec: %s\n", deviceSpec.c_str());
         ns.error = NETWORK_ERROR_INVALID_DEVICESPEC;
-        fnUartBUS.write(ns.error);
         return;
     }
 
@@ -986,7 +1044,6 @@ void drivewireNetwork::parse_and_instantiate_protocol()
     {
         Debug_printf("Could not open protocol.\n");
         ns.error = NETWORK_ERROR_GENERAL;
-        fnUartBUS.write(ns.error);
         return;
     }  
 }
@@ -1107,18 +1164,22 @@ void drivewireNetwork::set_translation()
 
 void drivewireNetwork::parse_json()
 {
-    fnUartBUS.write(json->parse());
+    ns.error = json->parse() ? NETWORK_ERROR_SUCCESS : NETWORK_ERROR_COULD_NOT_PARSE_JSON;
 }
 
 void drivewireNetwork::json_query()
 {
     std::string in_string;
+    uint16_t len = get_daux();
 
-    while (fnUartBUS.available())
+    while (len)
+    {
         in_string += fnUartBUS.read();
+        len--;
+    }
 
     // strip away line endings from input spec.
-    for (int i = 0; i < 256; i++)
+    for (int i = 0; i < in_string.size(); i++)
     {
         if (in_string[i] == 0x0A || in_string[i] == 0x0D || in_string[i] == 0x9b)
             in_string[i] = 0x00;
@@ -1134,8 +1195,12 @@ void drivewireNetwork::json_query()
     auto null_pos = std::find(tmp.begin(), tmp.end(), 0);
     *receiveBuffer += std::string(tmp.begin(), null_pos);
 
+    for (int i=0;i<in_string.length();i++)
+        Debug_printf("%02X ",in_string[i]);
+    
+    Debug_printf("\n");
+
     Debug_printf("Query set to >%s<\r\n", in_string.c_str());
-    //sio_complete();
 }
 
 void drivewireNetwork::do_idempotent_command_80()
@@ -1165,14 +1230,24 @@ void drivewireNetwork::do_idempotent_command_80()
 
 void drivewireNetwork::process()
 {
-    Debug_printf("Available? %u\n",fnUartBUS.available());
     // Read the three command and aux bytes
     cmdFrame.comnd = (uint8_t)fnUartBUS.read();
     cmdFrame.aux1 = (uint8_t)fnUartBUS.read();
     cmdFrame.aux2 = (uint8_t)fnUartBUS.read();
 
+    Debug_printf("comnd: '%c' %u,%u,%u\n",cmdFrame.comnd,cmdFrame.comnd,cmdFrame.aux1,cmdFrame.aux2);
+    
     switch (cmdFrame.comnd)
     {
+    case 0x00: // Ready?
+        ready(); // Yes.
+        break;
+    case 0x01: // Send Response
+        send_response();
+        break;
+    case 0x02: // Send error
+        send_error();
+        break;
     case 'O':
         open();
         break;

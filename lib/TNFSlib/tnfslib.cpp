@@ -10,6 +10,7 @@
 #include "fnSystem.h"
 #include "bus.h"
 #include "fnUDP.h"
+#include "fnTcpClient.h"
 
 #include "utils.h"
 
@@ -26,6 +27,9 @@
 #endif
 
 bool _tnfs_transaction(tnfsMountInfo *m_info, tnfsPacket &pkt, uint16_t datalen);
+bool _tnfs_send(fnUDP *udp, tnfsMountInfo *m_info, tnfsPacket &pkt, uint16_t payload_size);
+int _tnfs_recv(fnUDP *udp, tnfsMountInfo *m_info, tnfsPacket &pkt);
+
 #ifndef ESP_PLATFORM
 uint8_t _tnfs_session_recovery(tnfsMountInfo *m_info, uint8_t command);
 #endif
@@ -1225,6 +1229,87 @@ const char *tnfs_getcwd(tnfsMountInfo *m_info)
 // ------------------------------------------------
 
 /*
+    Send the packet, using UDP or TCP, depending on the m_info.
+    Reports whether the operation was successful.
+
+    If TCP is used and there's no connection, try to connect first.
+*/
+bool _tnfs_send(fnUDP *udp, tnfsMountInfo *m_info, tnfsPacket &pkt, uint16_t payload_size)
+{
+    if (m_info->protocol == TNFS_PROTOCOL_UNKNOWN || m_info->protocol == TNFS_PROTOCOL_TCP)
+    {
+        fnTcpClient *tcp = &m_info->tcp_client;
+        if (!tcp->connected())
+        {
+            bool success = false;
+            if (m_info->host_ip != IPADDR_NONE)
+                success = tcp->connect(m_info->host_ip, m_info->port, TNFS_TIMEOUT);
+            else
+                success = tcp->connect(m_info->hostname, m_info->port, TNFS_TIMEOUT);
+            if (!success && m_info->protocol == TNFS_PROTOCOL_UNKNOWN)
+            {
+                Debug_println("Can't connect to the TCP server; falling back to UDP.");
+                m_info->protocol = TNFS_PROTOCOL_UDP;
+                return _tnfs_send(udp, m_info, pkt, payload_size);
+            }
+            if (!success)
+            {
+                Debug_println("Can't connect to the TCP server");
+                return false;
+            }
+        }
+        int l = tcp->write(pkt.rawData, payload_size + TNFS_HEADER_SIZE);
+        return l == payload_size + TNFS_HEADER_SIZE;
+    }
+    else
+    {
+        bool sent;
+        // Use the IP address if we have it
+        if (m_info->host_ip != IPADDR_NONE)
+            sent = udp->beginPacket(m_info->host_ip, m_info->port);
+        else
+            sent = udp->beginPacket(m_info->hostname, m_info->port);
+
+        if (sent)
+        {
+            udp->write(pkt.rawData, payload_size + TNFS_HEADER_SIZE); // Add the data payload along with 4 bytes of TNFS header
+            sent = udp->endPacket();
+        }
+        return sent;
+    }
+}
+
+/*
+    Receive the packet, using UDP or TCP, depending on the m_info.
+    Return the number of received bytes or an negative value if the
+    packet is not available or an error occurred.
+*/
+int _tnfs_recv(fnUDP *udp, tnfsMountInfo *m_info, tnfsPacket &pkt)
+{
+    if (m_info->protocol == TNFS_PROTOCOL_TCP || m_info->protocol == TNFS_PROTOCOL_UNKNOWN)
+    {
+        fnTcpClient *tcp = &m_info->tcp_client;
+        if (!tcp->connected())
+        {
+            return -1;
+        }
+        if (!tcp->available())
+        {
+            return -1;
+        }
+        return tcp->read(pkt.rawData, sizeof(pkt.rawData));
+    }
+    else
+    {
+        if (!udp->parsePacket())
+        {
+            return -1;
+        }
+        return udp->read(pkt.rawData, sizeof(pkt.rawData));
+    }
+}
+
+/*
   Send constructed TNFS packet and check for reply
   The send/receive loop will be attempted tnfsPacket.max_retries times (default: TNFS_RETRIES)
   Each retry attempt is limited to tnfsPacket.timeout_ms (default: TNFS_TIMEOUT)
@@ -1262,19 +1347,7 @@ bool _tnfs_transaction(tnfsMountInfo *m_info, tnfsPacket &pkt, uint16_t payload_
 #endif
 
         // Send packet
-        bool sent = false;
-        // Use the IP address if we have it
-        if (m_info->host_ip != IPADDR_NONE)
-            sent = udp.beginPacket(m_info->host_ip, m_info->port);
-        else
-            sent = udp.beginPacket(m_info->hostname, m_info->port);
-
-        if (sent)
-        {
-            udp.write(pkt.rawData, payload_size + TNFS_HEADER_SIZE); // Add the data payload along with 4 bytes of TNFS header
-            sent = udp.endPacket();
-        }
-
+        bool sent = _tnfs_send(&udp, m_info, pkt, payload_size);
         if (!sent)
         {
             Debug_println("Failed to send packet - retrying");
@@ -1299,13 +1372,18 @@ bool _tnfs_transaction(tnfsMountInfo *m_info, tnfsPacket &pkt, uint16_t payload_
 #ifndef ESP_PLATFORM
                 fnSystem.delay_microseconds(2000); // wait short time for (local) data to arrive
 #endif
-                if (udp.parsePacket())
+                int l = _tnfs_recv(&udp, m_info, pkt);
+                if (l >= 0)
                 {
-                    unsigned short l = udp.read(pkt.rawData, sizeof(pkt.rawData));
                     __IGNORE_UNUSED_VAR(l);
 #ifdef DEBUG
                     _tnfs_debug_packet(pkt, l, true);
 #endif
+                    if (m_info->protocol == TNFS_PROTOCOL_UNKNOWN)
+                    {
+                        Debug_println("TNFS server supports TCP.");
+                        m_info->protocol = TNFS_PROTOCOL_TCP;
+                    }
 
                     // Out of order packet received.
                     if (pkt.sequence_num != current_sequence_num)
@@ -1366,6 +1444,16 @@ bool _tnfs_transaction(tnfsMountInfo *m_info, tnfsPacket &pkt, uint16_t payload_
 #endif
 
             } while ((fnSystem.millis() - ms_start) < m_info->timeout_ms); // packet receive loop
+
+            if (m_info->protocol == TNFS_PROTOCOL_UNKNOWN)
+            {
+                // This is probably an old tcpd server, accepting TCP connections but not responding
+                // to any commands. We should fall back to UDP too and don't count this iteration
+                // in the retry counter.
+                Debug_println("No response to TCP mount request; falling back to UDP.");
+                m_info->protocol = TNFS_PROTOCOL_UDP;
+                continue;
+            }
 
             if (retry >= 0)
             {

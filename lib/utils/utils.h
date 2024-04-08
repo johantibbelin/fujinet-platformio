@@ -46,6 +46,7 @@ void util_string_ltrim(std::string &s);
 void util_string_rtrim(std::string &s);
 void util_string_trim(std::string &s);
 
+std::string util_tolower(const std::string& str);
 void util_string_tolower(std::string &s);
 void util_string_toupper(std::string &s);
 
@@ -111,5 +112,7 @@ std::string prependSlash(const std::string& str);
 // helper function for Debug_print* macros on fujinet-pc
 void util_debug_printf(const char *fmt, ...);
 #endif // !ESP_PLATFORM
+
+char* util_strndup(const char* s, size_t n);
 
 #endif // _FN_UTILS_H

@@ -5,8 +5,13 @@
 #include <map>
 #include <cstdint>
 
+#include "mongoose.h"
+#undef mkdir
+
 // http timeout in ms
 #define HTTP_TIMEOUT 7000
+// while debugging, increase timeout
+// #define HTTP_TIMEOUT 600000
 
 // using namespace fujinet;
 
@@ -24,6 +29,11 @@ private:
     std::string _url;
 
     char *_buffer; // Will be allocated to hold message received by mongoose
+
+    // char *_dechunk_buffer; // allocated to handle dechunking
+    // will the read keep returning the old data? or can we detect and move on? the service won't be repeating, so we need to reset buffer correctly after dechunking
+    // uint16_t old_chunk_length = 0;
+
     int _buffer_pos;
     int _buffer_len;
     int _buffer_total_read;
@@ -33,9 +43,11 @@ private:
     bool _processed;
     bool _progressed;
 
+    // bool _chunked;
+
     bool _ignore_response_body = false;
     bool _transaction_begin;
-    bool _transaction_done;
+    bool _transaction_done = true;
     int _redirect_count;
     int _max_redirects;
     bool connected = false;
@@ -80,7 +92,7 @@ private:
 
     // static void _perform_subtask(void *param);
     // static esp_err_t _httpevent_handler(esp_http_client_event_t *evt);
-    static void _httpevent_handler(struct mg_connection *c, int ev, void *ev_data, void *user_data);
+    static void _httpevent_handler(struct mg_connection *c, int ev, void *ev_data);
 
     // void _delete_subtask_if_running();
 
@@ -89,6 +101,17 @@ private:
     int _perform();
     void _perform_connect();
     // int _perform_stream(esp_http_client_method_t method, uint8_t *write_data, int write_size);
+
+    bool is_chunked = false;
+    size_t process_chunked_data_in_place(char* data, size_t upper_bound);
+    void handle_connect(struct mg_connection *c);
+    void handle_http_msg(struct mg_connection *c, struct mg_http_message *hm);
+    void handle_read(struct mg_connection *c);
+    void send_data(struct mg_http_message *hm, int status_code);
+
+    void deepCopyHttpMessage(const struct mg_http_message *src, struct mg_http_message *dest);
+    void freeHttpMessage(struct mg_http_message *msg);
+    struct mg_http_message *current_message = nullptr;
 
 public:
 
@@ -115,6 +138,7 @@ public:
     int COPY(const char *destination, bool overwrite, bool move = false);
     int MOVE(const char *destination, bool overwrite);
 
+    bool is_transaction_done() { return _transaction_done; }
     int available();
 
     int read(uint8_t *dest_buffer, int dest_bufflen);
@@ -131,8 +155,21 @@ public:
     int get_header_count();
 
     void collect_headers(const char* headerKeys[], const size_t headerKeysCount);
+    void set_header_value(const struct mg_str *name, const struct mg_str *value);
 
     //const char * buffer_contents(int *buffer_len);
+
+    // Certificate handling
+    void load_system_certs();
+    mg_str ca;
+
+#if defined(_WIN32)
+    void load_system_certs_windows();
+    std::string concatenatedPEM;
+#else
+    void load_system_certs_unix();
+#endif
+
 };
 
 #endif // _MG_HTTPCLIENT_H_
