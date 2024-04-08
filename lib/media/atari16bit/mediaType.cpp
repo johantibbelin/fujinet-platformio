@@ -7,7 +7,7 @@
 #include <cstring>
 #include <vector>
 
-const std::vector<MediaType::DiskImageDetails> supported_images =
+/*const std::vector<MediaType::DiskImageDetails> supported_images =
 {{
     // 8MB Hard Disk Drive
     { MEDIATYPE_IMG_HD,           "MEDIATYPE_IMG_HD", "IMG", (8 * 1024 * 1024)      },
@@ -31,7 +31,7 @@ const std::vector<MediaType::DiskImageDetails> supported_images =
     // 8" DS/DD Floppy Drive (1.11M)
     { MEDIATYPE_IMG_FD111,        "MEDIATYPE_IMG_FD120", "IMG", (77 * 2 * 15 * 512) },
 
-}};
+}};*/
 
 MediaType::~MediaType()
 {
@@ -66,7 +66,7 @@ mediatype_t MediaType::discover_mediatype(const char *filename, uint32_t disksiz
 {
     // TODO: iterate through supported images matching ext and filesize
 
-    int l = strlen(filename);
+    /*int l = strlen(filename);
     if (l > 4 && filename[l - 4] == '.')
     {
         const char *ext = filename + l - 3;
@@ -83,7 +83,7 @@ mediatype_t MediaType::discover_mediatype(const char *filename, uint32_t disksiz
         if (it != supported_images.end()) {
             return (*it).media_type;
         }
-    }
+    }*/
 
     return MEDIATYPE_UNKNOWN;
 }
@@ -92,7 +92,7 @@ uint16_t MediaType::sector_size(uint16_t sector)
 {
     (void)sector; // variable sector lengths are evil!
 
-    return DISK_BYTES_PER_SECTOR_SINGLE;
+    return 512; /* Sector size is always 512 on the ST */
 }
 
-#endif // NEW_TARGET
+#endif // ATARI16BIT

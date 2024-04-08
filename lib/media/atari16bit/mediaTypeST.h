@@ -1,5 +1,5 @@
-#ifndef _MEDIATYPE_IMG_
-#define _MEDIATYPE_IMG_
+#ifndef _MEDIATYPE_ST_
+#define _MEDIATYPE_ST_
 
 #include <string>
 
@@ -8,13 +8,14 @@
 #include "mediaType.h"
 
 /**
- * IMG media type. Atari ST RAW Hard Disk image. ACSI supports up to 1 GB images. With ICD extensions lifts this limit. 
+ * ST media type. Atari ST RAW floppy image. 
+ * No header just the disk data as follows side0track0, side1 track0, side0 track1 side1 track1 ...
 */
 
 
 
 
-class MediaTypeIMG : public MediaType
+class MediaTypeST: public MediaType
 {
 private:
     uint32_t _sector_to_offset(uint16_t sectorNum);
@@ -40,4 +41,4 @@ public:
 };
 
 
-#endif // _MEDIATYPE_IMG_
+#endif // _MEDIATYPE_ST_
