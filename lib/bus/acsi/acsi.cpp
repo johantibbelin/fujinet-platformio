@@ -60,14 +60,17 @@ void systemBus::setup()
     // // Setup PICO UART
     Debug_println("Setup UART for PICO...");
  
+    
+ 
+    /*fnSystem.set_pin_mode(PIN_UART1_RX, gpio_mode_t::GPIO_MODE_INPUT); // There's no PULLUP/PULLDOWN on pins 34-39
+    fnSystem.set_pin_mode(PIN_UART1_TX, gpio_mode_t::GPIO_MODE_OUTPUT); // There's no PULLUP/PULLDOWN on pins 34-39
+*/
+
     fnUartBUS.begin(ACSI_BAUDRATE);
  
- 
-    fnSystem.set_pin_mode(PIN_UART1_RX, gpio_mode_t::GPIO_MODE_INPUT); // There's no PULLUP/PULLDOWN on pins 34-39
-    fnSystem.set_pin_mode(PIN_UART1_TX, gpio_mode_t::GPIO_MODE_OUTPUT); // There's no PULLUP/PULLDOWN on pins 34-39
 
     fnUartBUS.flush();
-    
+ 
    
 }
 

@@ -12,7 +12,7 @@
 #include <map>
 
 /* Using SIO device IDs for ACSI (internally) */
-#define ACSI_BAUDRATE 576000
+#define ACSI_BAUDRATE 2000000
 
 #define ACSI_DEVICEID_DISK 0x31
 #define ACSI_DEVICEID_DISK_LAST 0x3F

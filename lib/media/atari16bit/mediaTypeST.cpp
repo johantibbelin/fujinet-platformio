@@ -251,7 +251,7 @@ bool MediaTypeST::format(uint16_t *responsesize)
     memset(_media_sectorbuff, 0, sizeof(_media_sectorbuff));
 
     *responsesize = _media_sector_size;
-
+ 
     return false;
 }
 

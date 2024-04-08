@@ -7,31 +7,18 @@
 #include <cstring>
 #include <vector>
 
-/*const std::vector<MediaType::DiskImageDetails> supported_images =
+const std::vector<MediaType::DiskImageDetails> supported_images =
 {{
     // 8MB Hard Disk Drive
-    { MEDIATYPE_IMG_HD,           "MEDIATYPE_IMG_HD", "IMG", (8 * 1024 * 1024)      },
-    { MEDIATYPE_IMG_HD,           "MEDIATYPE_IMG_HD", "CPM", (8 * 1024 * 1024)      },
-
+    { MEDIATYPE_IMG,           "MEDIATYPE_IMG", "IMG", (8 * 1024 * 1024)      },
+ 
     // 3.5" DS/DD Floppy Drive (720K)
-    { MEDIATYPE_IMG_FD720,        "MEDIATYPE_IMG_FD720", "IMG", (80 * 2 * 9 * 512)  },
+    { MEDIATYPE_ST,        "MEDIATYPE_ST", "ST", (80 * 2 * 10 * 512)  },
 
-    // The PCW256/Pro-DOS definition is listed here;
-    { MEDIATYPE_IMG_FD720_PCW256, "MEDIATYPE_IMG_FD720_PCW256", "DSK", (80 * 2 * 9 * 512) },
+    // MSA floppy image
+    { MEDIATYPE_MSA, "MEDIATYPE_MSA", "MSA", (80 * 2 * 10 * 512) },
 
-    // 3.5" DS/HD Floppy Drive (1.44M)
-    { MEDIATYPE_IMG_FD144,        "MEDIATYPE_IMG_FD144", "IMG", (80 * 2 * 18 * 512) },
-
-    // 5.25" DS/DD Floppy Drive (360K) 
-    { MEDIATYPE_IMG_FD360,        "MEDIATYPE_IMG_FD360", "IMG", (40 * 2 * 9 * 512)  },
-
-    // 5.25" DS/HD Floppy Drive (1.2M)
-    { MEDIATYPE_IMG_FD120,        "MEDIATYPE_IMG_FD120", "IMG", (80 * 2 * 15 * 512) },
-
-    // 8" DS/DD Floppy Drive (1.11M)
-    { MEDIATYPE_IMG_FD111,        "MEDIATYPE_IMG_FD120", "IMG", (77 * 2 * 15 * 512) },
-
-}};*/
+}};
 
 MediaType::~MediaType()
 {
@@ -66,7 +53,7 @@ mediatype_t MediaType::discover_mediatype(const char *filename, uint32_t disksiz
 {
     // TODO: iterate through supported images matching ext and filesize
 
-    /*int l = strlen(filename);
+    int l = strlen(filename);
     if (l > 4 && filename[l - 4] == '.')
     {
         const char *ext = filename + l - 3;
@@ -83,7 +70,7 @@ mediatype_t MediaType::discover_mediatype(const char *filename, uint32_t disksiz
         if (it != supported_images.end()) {
             return (*it).media_type;
         }
-    }*/
+    }
 
     return MEDIATYPE_UNKNOWN;
 }
