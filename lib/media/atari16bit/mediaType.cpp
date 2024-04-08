@@ -10,26 +10,13 @@
 const std::vector<MediaType::DiskImageDetails> supported_images =
 {{
     // 8MB Hard Disk Drive
-    { MEDIATYPE_IMG_HD,           "MEDIATYPE_IMG_HD", "IMG", (8 * 1024 * 1024)      },
-    { MEDIATYPE_IMG_HD,           "MEDIATYPE_IMG_HD", "CPM", (8 * 1024 * 1024)      },
-
+    { MEDIATYPE_IMG,           "MEDIATYPE_IMG", "IMG", (8 * 1024 * 1024)      },
+ 
     // 3.5" DS/DD Floppy Drive (720K)
-    { MEDIATYPE_IMG_FD720,        "MEDIATYPE_IMG_FD720", "IMG", (80 * 2 * 9 * 512)  },
+    { MEDIATYPE_ST,        "MEDIATYPE_ST", "ST", (80 * 2 * 10 * 512)  },
 
-    // The PCW256/Pro-DOS definition is listed here;
-    { MEDIATYPE_IMG_FD720_PCW256, "MEDIATYPE_IMG_FD720_PCW256", "DSK", (80 * 2 * 9 * 512) },
-
-    // 3.5" DS/HD Floppy Drive (1.44M)
-    { MEDIATYPE_IMG_FD144,        "MEDIATYPE_IMG_FD144", "IMG", (80 * 2 * 18 * 512) },
-
-    // 5.25" DS/DD Floppy Drive (360K) 
-    { MEDIATYPE_IMG_FD360,        "MEDIATYPE_IMG_FD360", "IMG", (40 * 2 * 9 * 512)  },
-
-    // 5.25" DS/HD Floppy Drive (1.2M)
-    { MEDIATYPE_IMG_FD120,        "MEDIATYPE_IMG_FD120", "IMG", (80 * 2 * 15 * 512) },
-
-    // 8" DS/DD Floppy Drive (1.11M)
-    { MEDIATYPE_IMG_FD111,        "MEDIATYPE_IMG_FD120", "IMG", (77 * 2 * 15 * 512) },
+    // MSA floppy image
+    { MEDIATYPE_MSA, "MEDIATYPE_MSA", "MSA", (80 * 2 * 10 * 512) },
 
 }};
 
@@ -92,7 +79,7 @@ uint16_t MediaType::sector_size(uint16_t sector)
 {
     (void)sector; // variable sector lengths are evil!
 
-    return DISK_BYTES_PER_SECTOR_SINGLE;
+    return 512; /* Sector size is always 512 on the ST */
 }
 
-#endif // NEW_TARGET
+#endif // ATARI16BIT

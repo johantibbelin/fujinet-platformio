@@ -13,15 +13,10 @@
 enum mediatype_t 
 {
     MEDIATYPE_UNKNOWN = 0,
-    MEDIATYPE_IMG_HD,      // 8meg RomWBW disk splice  
-    MEDIATYPE_IMG_FD720,   // 3.5" DS/DD Floppy Drive (720K)
-    MEDIATYPE_IMG_FD720_PCW256,   // 3.5" DS/DD Floppy Drive (720K) - SAM Coupe Pro-DOS format
-    MEDIATYPE_IMG_FD144,   // 3.5" DS/HD Floppy Drive (1.44M)
-    MEDIATYPE_IMG_FD360,   // 5.25" DS/DD Floppy Drive (360K) 
-    MEDIATYPE_IMG_FD120,   // 5.25" DS/HD Floppy Drive (1.2M)
-    MEDIATYPE_IMG_FD111,   // 8" DS/DD Floppy Drive (1.11M)
-    //MEDIATYPE_IMG_IBM3740, // 8" SS/SD Floppy Drive (237.5KB)
-
+    MEDIATYPE_IMG,    // Hard drive img file
+    MEDIATYPE_ST,     // .ST RAW floppy image
+    MEDIATYPE_STX,    // Pasti floppy image (unimplemented (for now))
+    MEDIATYPE_MSA,    // .MSA floppy image from Magic Shadow Archiver
     MEDIATYPE_COUNT
 };
 

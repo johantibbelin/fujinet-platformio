@@ -12,8 +12,8 @@
 /* UART - fnuart.cpp */
 #define PIN_UART0_RX 3  // USB Serial
 #define PIN_UART0_TX 1  // USB Serial
-#define PIN_UART1_RX 26 // Debug Pico
-#define PIN_UART1_TX 25 // Debug Pico
+#define PIN_UART1_RX 16 // PICO UART
+#define PIN_UART1_TX 17 // PICO UART
 #define PIN_UART2_RX 33
 #define PIN_UART2_TX 21
 
@@ -31,8 +31,8 @@
 #define PIN_DAC1 -1 // not connected
 
 /* ACSI SPI Pins */
-#define PIN_ACSI_SPI_CS GPIO_NUM_15
+/*#define PIN_ACSI_SPI_CS GPIO_NUM_15
 #define PIN_ACSI_SPI_MISO GPIO_NUM_12
 #define PIN_ACSI_SPI_MOSI GPIO_NUM_13
-#define PIN_ACSI_SPI_CLK GPIO_NUM_14
+#define PIN_ACSI_SPI_CLK GPIO_NUM_14*/
 #endif /* PINMAP_ATARI16BIT_REV0 */

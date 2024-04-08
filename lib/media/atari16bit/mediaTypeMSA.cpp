@@ -1,6 +1,6 @@
 #ifdef BUILD_ATARI16BIT
 
-#include "mediaTypeIMG.h"
+#include "mediaTypeMSA.h"
 
 #include <cstdint>
 #include <cstring>
@@ -142,13 +142,13 @@
 
 
 // Returns byte offset of given sector number (1-based)
-uint32_t MediaTypeIMG::_sector_to_offset(uint16_t sectorNum)
+uint32_t MediaTypeMSA::_sector_to_offset(uint16_t sectorNum)
 {
     return (uint32_t )sectorNum * DISK_BYTES_PER_SECTOR_SINGLE;
 }
 
 // Returns TRUE if an error condition occurred
-bool MediaTypeIMG::read(uint16_t sectornum, uint16_t *readcount)
+bool MediaTypeMSA::read(uint16_t sectornum, uint16_t *readcount)
 {
     Debug_print("IMG READ\n");
 
@@ -187,7 +187,7 @@ bool MediaTypeIMG::read(uint16_t sectornum, uint16_t *readcount)
 }
 
 // Returns TRUE if an error condition occurred
-bool MediaTypeIMG::write(uint16_t sectornum, bool verify)
+bool MediaTypeMSA::write(uint16_t sectornum, bool verify)
 {
     Debug_printf("IMG WRITE %u of %u\n", sectornum, _media_num_sectors);
 
@@ -232,7 +232,7 @@ bool MediaTypeIMG::write(uint16_t sectornum, bool verify)
     return false;
 }
 
-void MediaTypeIMG::status(uint8_t statusbuff[4])
+void MediaTypeMSA::status(uint8_t statusbuff[4])
 {
 }
 
@@ -243,7 +243,7 @@ void MediaTypeIMG::status(uint8_t statusbuff[4])
     a sector-sized buffer containing a list of 16-bit bad sector numbers terminated by $FFFF.
 */
 // Returns TRUE if an error condition occurred
-bool MediaTypeIMG::format(uint16_t *responsesize)
+bool MediaTypeMSA::format(uint16_t *responsesize)
 {
     Debug_print("IMG FORMAT\n");
 
@@ -251,14 +251,14 @@ bool MediaTypeIMG::format(uint16_t *responsesize)
     memset(_media_sectorbuff, 0, sizeof(_media_sectorbuff));
 
     *responsesize = _media_sector_size;
-
+ 
     return false;
 }
 
 /* 
  Mount 8MB RC2014 CP/M "slice"
 */
-mediatype_t MediaTypeIMG::mount(FILE *f, uint32_t disksize, mediatype_t disk_type)
+mediatype_t MediaTypeMSA::mount(FILE *f, uint32_t disksize, mediatype_t disk_type)
 {
     Debug_print("IMG MOUNT\n");
 
@@ -270,9 +270,9 @@ mediatype_t MediaTypeIMG::mount(FILE *f, uint32_t disksize, mediatype_t disk_typ
 }
 
 // Returns FALSE on error
-bool MediaTypeIMG::create(FILE *f, uint16_t sectorSize, uint16_t numSectors)
+bool MediaTypeMSA::create(FILE *f, uint16_t sectorSize, uint16_t numSectors)
 {
     return true;
 }
 
-#endif /* BUILD_ADAM */
+#endif /* BUILD_ATARI16BIT */
