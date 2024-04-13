@@ -26,6 +26,63 @@ uint8_t acsi_checksum(uint8_t *buf, unsigned short len)
     return chk;
 }
 
+void virtualDevice::acsi_complete()
+{
+    fnSystem.delay_microseconds(DELAY_T5);
+#ifdef ESP_PLATFORM
+   // acsi_get_bus().get_modem()->get_uart()->write('C');
+#else
+    fnSioCom.write('C');
+#endif
+    Debug_println("COMPLETE!");
+}
+
+void virtualDevice::bus_to_computer(uint8_t *buf, uint16_t len, bool err)
+{
+    // Write data frame to computer
+    Debug_printf("->ACSI write %hu bytes\n", len);
+
+#ifdef VERBOSE_ACSI
+    Debug_printf("SEND <%u> BYTES\n\t", len);
+    for (int i = 0; i < len; i++)
+        Debug_printf("%02x ", buf[i]);
+    Debug_print("\n");
+#endif
+
+    // Write ERROR or COMPLETE status
+    if (err == true)
+        acsi_error();
+    else
+        acsi_complete();
+
+    // Write data frame
+#ifdef ESP_PLATFORM
+  //  UARTManager *uart = acsi_get_bus().get_modem()->get_uart();
+//    uart->write(buf, len);
+    // Write checksum
+  //  uart->write(acsi_checksum(buf, len));
+
+ //   uart->flush();
+#else
+    fnSioCom.write(buf, len);
+    // Write checksum
+    fnSioCom.write(sio_checksum(buf, len));
+
+    fnSioCom.flush();
+#endif
+}
+
+// TODO apc: change return type to indicate valid/invalid checksum
+/*
+   SIO READ from ATARI by DEVICE
+   buf = buffer from atari to fujinet
+   len = length
+   Returns checksum
+*/
+uint8_t virtualDevice::bus_to_peripheral(uint8_t *buf, unsigned short len)
+{
+    return 0;
+}
 
 void virtualDevice::process(uint32_t commanddata, uint8_t checksum)
 {
@@ -35,6 +92,7 @@ void virtualDevice::process(uint32_t commanddata, uint8_t checksum)
 
     fnUartDebug.printf("process() not implemented yet for this device. Cmd received: %02x\n", cmdFrame.comnd);
 }
+systemBus virtualDevice::acsi_get_bus() { return ACSI; }
 
 void systemBus::service()
 {
@@ -52,7 +110,18 @@ void systemBus::service()
         }
     }
 }
-    
+
+void virtualDevice::acsi_error()
+{
+    fnSystem.delay_microseconds(DELAY_T5);
+#ifdef ESP_PLATFORM
+//    acsi_get_bus().get_modem()->get_uart()->write('E');
+#else
+    fnSioCom.write('E');
+#endif
+    Debug_println("ERROR!");
+}
+
 void systemBus::setup()
 {
     Debug_println("ACSI SETUP");
@@ -70,9 +139,9 @@ void systemBus::setup()
  
 
     fnUartBUS.flush();
- 
+    
    
-}
+ }
 
 void systemBus::shutdown()
 {

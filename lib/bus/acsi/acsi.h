@@ -28,6 +28,10 @@
 #define ACSI_DEVICEID_MODEM 0x50
 
 #define ACSI_DEVICEID_CPM 0x5A
+
+#define DELAY_T4 800
+#define DELAY_T5 800
+
 // This is used for the network protocol adapters.
 union cmdFrame_t
 {
@@ -51,7 +55,7 @@ class ACSIFuji;     // declare here so can reference it, but define in fuji.h
 class ACSICPM;
 class ACSIModem;
 class ACSIPrinter;
-
+//class modem;
 /**
  * @brief An ACSI Device
  */
@@ -60,6 +64,10 @@ class virtualDevice
 protected:
     friend systemBus; // We exist on the ACSI Bus, and need its methods.
 
+    void bus_to_computer(uint8_t *buf, uint16_t len, bool err);
+
+    uint8_t bus_to_peripheral(uint8_t *buf, unsigned short len);
+    
     /**
      * @brief Device Number: 0-255
      */
@@ -89,6 +97,12 @@ protected:
      * @brief command frame, used by network protocol, ultimately
      */
     cmdFrame_t cmdFrame;
+    
+    systemBus acsi_get_bus();
+
+    void acsi_error();
+
+    void acsi_complete();
 
 public:
 
@@ -111,7 +125,7 @@ class systemBus
 {
 private:
     std::map<uint8_t, virtualDevice *> _daisyChain;
-
+    ACSIModem *_modemDev = nullptr;
 public:
     void setup(); // one time setup
     void service(); // this runs in a loop 
@@ -132,6 +146,9 @@ public:
 
     bool shuttingDown = false;                                  // TRUE if we are in shutdown process
     bool getShuttingDown() { return shuttingDown; };
+
+
+   ACSIModem *get_modem() { return _modemDev; }
 };
 
 extern systemBus ACSI;

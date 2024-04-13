@@ -70,16 +70,47 @@ ACSIFuji::ACSIFuji()
 // Reset FujiNet
 void ACSIFuji::ACSI_reset_fujinet()
 {
+    Debug_println("Fuji cmd: REBOOT");
+    //ACSI_complete();
+    fnSystem.reboot();
 }
 
 // Scan for networks
 void ACSIFuji::ACSI_net_scan_networks()
 {
+   Debug_println("Fuji cmd: SCAN NETWORKS");
+
+    char ret[4] = {0};
+
+    _countScannedSSIDs = fnWiFi.scan_networks();
+
+    ret[0] = _countScannedSSIDs;
+
+    //bus_to_computer((uint8_t *)ret, 4, false);
 }
 
 // Return scanned network entry
 void ACSIFuji::ACSI_net_scan_result()
 {
+    Debug_println("Fuji cmd: GET SCAN RESULT");
+
+    // Response to  FUJICMD_GET_SCAN_RESULT
+    struct
+    {
+        char ssid[MAX_SSID_LEN+1];
+        uint8_t rssi;
+    } detail;
+
+    bool err = false;
+    if (cmdFrame.aux1 < _countScannedSSIDs)
+        fnWiFi.get_scan_result(cmdFrame.aux1, detail.ssid, &detail.rssi);
+    else
+    {
+        memset(&detail, 0, sizeof(detail));
+        err = true;
+    }
+
+    //bus_to_computer((uint8_t *)&detail, sizeof(detail), err);
 }
 
 //  Get SSID
