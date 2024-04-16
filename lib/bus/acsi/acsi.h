@@ -11,6 +11,58 @@
 
 #include <map>
 
+/**
+ * ACSI Commands (AHDI)
+*/
+
+#define ACSI_CMD_TEST_UNIT_READY 0x00
+#define ACSI_CMD_VERIFY_TRACK 0x05
+#define ACSI_CMD_FORMAT_TRACK 0x06
+#define ACSI_CMD_READ 0x08                  /* Read sectors with implied seek */
+#define ACSI_CMD_WRITE 0x0a                 /* Write sectors with implied seek */
+#define ACSI_CMD_SEEK 0x0b                  /* Seek sector */
+#define ACSI_CMD_CORRECTION_PATTERN 0x0d    /* Correction pattern */
+#define ACSI_CMD_MODE_SELECT 0x15           /* Mode select */
+#define ACSI_MODE_SENSE 0x1a                /* Mode Sense */
+
+#define ACSI_CMD_INQUIRY 0x12               /* Inquiry command */
+/**
+ * ICD extension. SCSI command follows, up to 12 bytes
+*/
+#define ACSI_CMD_ICD_EXT 0x1f               /* ICD extension following (SCSI-1 or SCSI-2 commands) up to 12 more bytes */
+
+/**
+ * Printer command
+*/
+
+#define ACSI_CMD_PRINT 0x0a                 /* Same as WRITE (used by Atari Laser printers (and Fujinet)) */
+
+/**
+ * ACSI Fujinet command
+ * Byte 0: bit 7-5:ID bit 4-0: 0x01
+ * Byte 1: SIO command
+ * Byte 2:
+ * Byte 3:
+ * byte 4:
+ * byte 5:
+*/
+
+#define ACSI_CMD_FUJINET 0x01              /* Fujinet command (tunneling SIO commands) */
+
+/**
+ * SCSI commands
+*/
+
+#define SCSI_CMD_READ_CAPACITY 0x25
+#define SCSI_CMD_READ10 0x28
+#define SCSI_CMD_WRITE10 0x2a
+#define SCSI_CMD_VERIFY 0x2f
+#define SCSI_CMD_READ_LONG 0x3e
+#define SCSI_CMD_WRITE_LONG 0x3f
+#define SCSI_CMD_REPORT_LUNS 0xa0
+
+
+
 /* Using SIO device IDs for ACSI (internally) */
 #define ACSI_BAUDRATE 2000000
 
@@ -50,12 +102,47 @@ union cmdFrame_t
     } __attribute__((packed));
 };
 
+/**
+ * @brief Type for tunneling SIO cmdFrames through ACSI. Command number 0x01.
+*/
+
+struct acsiCmdFrame_t
+{
+    uint8_t deviceId_Cmd;
+    cmdFrame_t SioCmdFrame;
+};
+
+/**
+ * @brief ACSI command. 6 bytes.
+*/
+
+struct acsiCmd_t
+{
+    uint8_t deviceId_Cmd;           /* Device Id and command */
+    uint8_t logicId_blockHi;
+    uint8_t blockMid;
+    uint8_t blockLow;
+    uint8_t blockCount;
+    uint8_t controlByte;
+};
+
+/**
+ * @brief ACSI command with ICD extension. Sends SCSI-1 and SCSI-2 commands over ACSI.
+*/
+
+struct acsiCmd_icdExt_t
+{
+    uint8_t deviceId_Cmd; /* always ID + 0x1f */
+    uint8_t scsiCmd[12];  /* SCSI command */
+};
+
 class systemBus;
 class ACSIFuji;     // declare here so can reference it, but define in fuji.h
 class ACSICPM;
 class ACSIModem;
 class ACSIPrinter;
 //class modem;
+
 /**
  * @brief An ACSI Device
  */
