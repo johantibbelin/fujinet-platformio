@@ -25,6 +25,9 @@ uint8_t acsi_checksum(uint8_t *buf, unsigned short len)
 
     return chk;
 }
+uint8_t acsi_get_id(uint8_t b) { return (b >> 5)}
+
+uint8_t acsi_get_cmd(uint8_t b) { return (b && 0x1f) }
 
 void virtualDevice::acsi_complete()
 {
