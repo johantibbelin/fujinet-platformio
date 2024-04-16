@@ -50,7 +50,14 @@
 #define ACSI_CMD_FUJINET 0x01              /* Fujinet command (tunneling SIO commands) */
 
 /**
- * SCSI commands
+ * @brief Fujinet ACSI command for network traffic.
+*/
+
+#define ACSI_CMD_NETWORK 0x09
+
+/**
+ * @brief SCSI commands for use with ICD extensions.
+ * @details Used to overcome the 1 GB limit built into ACSI (21 bit block adress.)
 */
 
 #define SCSI_CMD_READ_CAPACITY 0x25
@@ -61,7 +68,11 @@
 #define SCSI_CMD_WRITE_LONG 0x3f
 #define SCSI_CMD_REPORT_LUNS 0xa0
 
+/**
+ * @brief ACSI inquiry string for fujinet
+*/
 
+static char _acsi_inquiry[32] ="FujiNet \0";
 
 /* Using SIO device IDs for ACSI (internally) */
 #define ACSI_BAUDRATE 2000000
