@@ -25,7 +25,16 @@ uint8_t acsi_checksum(uint8_t *buf, unsigned short len)
 
     return chk;
 }
+/**
+ * @breif Returns top 3 bits which is ACSI id.
+*/
+
 uint8_t acsi_get_id(uint8_t b) { return (b >> 5)}
+
+/**
+ * @breif 5 least significant bit form a byte. ACSI command.
+ * @return ACSI command
+*/
 
 uint8_t acsi_get_cmd(uint8_t b) { return (b && 0x1f) }
 

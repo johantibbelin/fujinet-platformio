@@ -26,10 +26,12 @@
 #define ACSI_MODE_SENSE 0x1a                /* Mode Sense */
 
 #define ACSI_CMD_INQUIRY 0x12               /* Inquiry command */
+
 /**
  * ICD extension. SCSI command follows, up to 12 bytes
 */
-#define ACSI_CMD_ICD_EXT 0x1f               /* ICD extension following (SCSI-1 or SCSI-2 commands) up to 12 more bytes */
+
+#define ACSI_CMD_ICD_EXT 0x1f               /* ICD extension following (SCSI-2 commands) up to 12 more bytes */
 
 /**
  * Printer command
@@ -38,16 +40,17 @@
 #define ACSI_CMD_PRINT 0x0a                 /* Same as WRITE (used by Atari Laser printers (and Fujinet)) */
 
 /**
- * ACSI Fujinet command
+ * @brief ACSI command number to sed SIO command.
+ * @details Fujinet SIO command over ACSI
  * Byte 0: bit 7-5:ID bit 4-0: 0x01
- * Byte 1: SIO command
- * Byte 2:
- * Byte 3:
- * byte 4:
- * byte 5:
+ * Byte 1: Device
+ * Byte 2: Command
+ * Byte 3: Aux1
+ * byte 4: Aux2
+ * byte 5: Checksum
 */
 
-#define ACSI_CMD_FUJINET 0x01              /* Fujinet command (tunneling SIO commands) */
+#define ACSI_CMD_FUJINET 0x02              /* Fujinet command (tunneling SIO commands) */
 
 /**
  * @brief Fujinet ACSI command for network traffic.

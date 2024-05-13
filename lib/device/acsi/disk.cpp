@@ -63,4 +63,4 @@ void ACSIDisk::process(uint32_t commanddata, uint8_t checksum)
 {
 }
 
-#endif /* NEW_TARGET */
+#endif /* ATARI16BIT */
