@@ -78,6 +78,9 @@ int setup_acsi_gpio() {
 } /* setup_acsi_gpio() */
 
 int main() {
+    int i;
+    uint8_t d,id,cmd;
+    uint8_t cdb[6];
     stdio_init_all();
     //sleep_ms(8000);
     printf("Pico ACSI controller\n\n");
@@ -91,26 +94,25 @@ int main() {
     gpio_set_dir(LED_PIN,GPIO_OUT);
     gpio_put(LED_PIN,0);
     while(1) {
-      /*  gpio_put(LED_PIN,1);
-        gpio_put(ACSI_IRQ,1);
-        printf("Led On! D-pins high!\n");
-        //dpins_high();
-        sleep_ms(1000);
-        printf("Led Off! D-pins low!\n");
-        //dpins_low();
-        gpio_put(LED_PIN,0);
-        gpio_put(ACSI_IRQ,1);
-        sleep_ms(1000); */
-        if(!gpio_get(ACSI_CS)) {
-           
-            //sleep_us(1);
-            gpio_put(ACSI_IRQ,0);
-            sleep_us(50);
-            gpio_put(ACSI_IRQ,1);
-            //gpio_put(LED_PIN,1);
-            //printf("CS detected.\n");
-            //sleep_us(20);
-            //gpio_put(LED_PIN,0);
+     
+        if(!gpio_get(ACSI_A1)) {
+           if (!gpio_get(ACSI_CS)) {
+              d = 0;  
+              for (i=0;i<7;i++) {
+                d = d + (gpio_get(i+8) << i);
+              }  
+              id = d >> 5;
+              cmd = d && 0x1f;
+              cdb[0]=d;
+              if (id == 0) {
+                gpio_put(ACSI_IRQ,0);
+                sleep_us(2);
+                gpio_put(ACSI_IRQ,1);
+
+                /* Get rest of the 5 cdb bytes */
+              }
+           }
+            
         }
     }
     return 0;
