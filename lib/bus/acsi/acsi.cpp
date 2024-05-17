@@ -26,17 +26,23 @@ uint8_t acsi_checksum(uint8_t *buf, unsigned short len)
     return chk;
 }
 /**
- * @breif Returns top 3 bits which is ACSI id.
+ * @brief Returns top 3 bits which is ACSI id.
 */
 
-uint8_t acsi_get_id(uint8_t b) { return (b >> 5)}
+uint8_t acsi_get_id(uint8_t b) { return (b >> 5);}
 
+uint8_t acsi_inquiry() 
+{
+    Debug_println("ACSI Inquiry");
+    Debug_printf("%s",_acsi_inquiry);
+    return 0;
+}
 /**
- * @breif 5 least significant bit form a byte. ACSI command.
+ * @brief 5 least significant bit form a byte. ACSI command.
  * @return ACSI command
 */
 
-uint8_t acsi_get_cmd(uint8_t b) { return (b && 0x1f) }
+uint8_t acsi_get_cmd(uint8_t b) { return (b && 0x1f); }
 
 void virtualDevice::acsi_complete()
 {
