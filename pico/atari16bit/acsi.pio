@@ -9,24 +9,24 @@
 .define ID 3 
 
 ;GPIO pins for control signals
-.define IRQ 3
+.define AIRQ 3
 .define CS 2
 .define A1 27
 .define ACK 26
 
 .program acsi_cmd
-; Program waits for A1 and CS LOW then throws interrupt
+.side_set 1; Program waits for A1 and CS LOW then throws interrupt
 
 ;Sideset is used for _IRQ signal
 ;.side_set 1
 
 start:
     
-    wait 0 gpio A1
-    wait 0 gpio CS [4]
-    in pins,8
-    irq wait 1
-    jmp start
+    wait 0 gpio A1 side 1
+    wait 0 gpio CS side 1 [4]
+    in pins,8 side 1
+    irq wait 1 side 1
+    jmp start side 1
     
 
 .program acsi_dma_in
@@ -35,11 +35,11 @@ start:
 
 start_dma_in:
 
-pull 8
-out osr,8 side 0 [5]
-wait 0 gpio ACK
-nop side 1 [5]
-jmp start_dma_in
+;pull 8
+;out osr,8 side 0 [5]
+;wait 0 gpio ACK
+;nop side 1 [5]
+jmp start_dma_in side 1 [8]
 
 %c-sdk {
 
