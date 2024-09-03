@@ -92,8 +92,10 @@ int main() {
     
     gpio_init(LED_PIN);
     gpio_set_dir(LED_PIN,GPIO_OUT);
+    gpio_put(LED_PIN,1);
+    sleep_ms(1000);
     gpio_put(LED_PIN,0);
-    while(1) {
+    while(true) {
      
         if(!gpio_get(ACSI_A1)) {
            if (!gpio_get(ACSI_CS)) {
@@ -115,5 +117,5 @@ int main() {
             
         }
     }
-    return 0;
+    
 }
