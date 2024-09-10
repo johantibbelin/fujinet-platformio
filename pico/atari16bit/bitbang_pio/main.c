@@ -6,11 +6,23 @@
 */
 #include <stdio.h>
 #include "pico/stdlib.h"
+#include "pico/multicore.h"
 #include "hardware/gpio.h"
+#include "hardware/spi.h"
+#include "hardware/dma.h"
 
 #include "pinmap.h"
 
 #define LED_PIN 25
+
+/**
+ * ACSI is handled by core1
+ */
+void core1_entry() {
+    while (1) {
+        //Core one code goes here
+    }
+}
 
 void dpins_high() { 
     gpio_put(ACSI_D_DIR,0); /* Output */
@@ -99,6 +111,10 @@ int main() {
     gpio_init(LED_PIN);
     gpio_set_dir(LED_PIN,GPIO_OUT);
     gpio_put(LED_PIN,0);
+    
+    printf("Starting Core1 (ACSI handling.)\n \n");
+    multicore_launch_core1(core1_entry);
+    
     while(1) {
      
         if(!gpio_get(ACSI_A1)) {
