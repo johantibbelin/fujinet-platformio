@@ -13,6 +13,13 @@
 
 #include "pinmap.h"
 
+/**
+ * PIO include files
+ */
+#include "dma_in.pio.h"
+#include "dma_out.pio.h"
+
+
 #define LED_PIN 25
 
 /**
