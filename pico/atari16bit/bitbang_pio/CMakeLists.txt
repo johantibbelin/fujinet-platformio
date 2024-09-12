@@ -13,8 +13,9 @@ pico_sdk_init()
 add_executable(main
     main.c
 )
-pico_generate_pio_header(main ${CMAKE_CURRENT_LIST_DIR}/dma_in.pio)
+pico_generate_pio_header(main ${CMAKE_CURRENT_LIST_DIR}/acsi_cmd.pio)
 pico_generate_pio_header(main ${CMAKE_CURRENT_LIST_DIR}/dma_out.pio)
+pico_generate_pio_header(main ${CMAKE_CURRENT_LIST_DIR}/dma_in.pio)
 
 pico_enable_stdio_usb(main 1)
 # Add pico_stdlib library which aggregates commonly used features
