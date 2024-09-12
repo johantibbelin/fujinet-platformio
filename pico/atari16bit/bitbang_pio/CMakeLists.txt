@@ -13,9 +13,12 @@ pico_sdk_init()
 add_executable(main
     main.c
 )
+pico_generate_pio_header(main ${CMAKE_CURRENT_LIST_DIR}/dma_in.pio)
+pico_generate_pio_header(main ${CMAKE_CURRENT_LIST_DIR}/dma_out.pio)
+
 pico_enable_stdio_usb(main 1)
 # Add pico_stdlib library which aggregates commonly used features
-target_link_libraries(main pico_stdlib pico_multicore hardware_spi hardware_dma)
+target_link_libraries(main pico_stdlib pico_multicore hardware_spi hardware_dma hardware_pio)
 
 # create map/bin/hex/uf2 file in addition to ELF.
 pico_add_extra_outputs(main)
