@@ -1,10 +1,36 @@
+/**
+ * @brief A simpler version that uses PIO and bitbanging for ACSI.
+ * @details Uses PIO for waiting on first command frame byte. Handling and recieving remaining bytes is handled in C code. 
+ * PIO is used for DMA transfers.
+ * @author Johan Tibbelin (sjfroos) 
+*/
 #include <stdio.h>
 #include "pico/stdlib.h"
+#include "pico/multicore.h"
 #include "hardware/gpio.h"
+#include "hardware/spi.h"
+#include "hardware/dma.h"
 
 #include "pinmap.h"
 
+/**
+ * PIO include files
+ */
+#include "acsi_cmd.pio.h"
+#include "dma_in.pio.h"
+#include "dma_out.pio.h"
+
+
 #define LED_PIN 25
+
+/**
+ * ACSI is handled by core1
+ */
+void core1_entry() {
+    while (1) {
+        //Core one code goes here
+    }
+}
 
 void dpins_high() { 
     gpio_put(ACSI_D_DIR,0); /* Output */
@@ -92,10 +118,12 @@ int main() {
     
     gpio_init(LED_PIN);
     gpio_set_dir(LED_PIN,GPIO_OUT);
-    gpio_put(LED_PIN,1);
-    sleep_ms(1000);
     gpio_put(LED_PIN,0);
-    while(true) {
+    
+    printf("Starting Core1 (ACSI handling.)\n \n");
+    multicore_launch_core1(core1_entry);
+    
+    while(1) {
      
         if(!gpio_get(ACSI_A1)) {
            if (!gpio_get(ACSI_CS)) {
@@ -117,5 +145,5 @@ int main() {
             
         }
     }
-    
+    return 0;
 }
