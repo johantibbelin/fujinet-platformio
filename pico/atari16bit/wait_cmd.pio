@@ -15,7 +15,7 @@
 .define A1 27
 .define ACK 26
 
-.program acsi_cmd
+.program wait_cmd
 ;.side_set 1; Program waits for A1 and CS LOW then throws interrupt
 
 
