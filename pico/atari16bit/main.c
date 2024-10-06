@@ -10,6 +10,7 @@
 #include "hardware/gpio.h"
 #include "hardware/spi.h"
 #include "hardware/dma.h"
+#include "hardware/pio.h"
 
 #include "pinmap.h"
 
