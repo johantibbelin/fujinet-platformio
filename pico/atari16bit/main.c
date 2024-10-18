@@ -20,6 +20,7 @@
 #include "acsi_cmd.pio.h"
 #include "dma_in.pio.h"
 #include "dma_out.pio.h"
+#include "wait_cmd.pio.h"
 
 
 #define LED_PIN 25
