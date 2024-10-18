@@ -10,31 +10,38 @@
 .define ID 3 
 
 ;GPIO pins for control signals
-.define AIRQ 3
+.define AIRQ 6
 .define CS 2
-.define A1 27
-.define ACK 26
-
+.define A1 22
+.define ACK 21
+.define RW 26
+.define LED 25
 .program wait_cmd
-;.side_set 1; Program waits for A1 and CS LOW then throws interrupt
+.side_set 1; Program waits for A1 and CS LOW then throws interrupt
 
 
 start:
     .wrap_target
-    wait 0 gpio A1 
-    wait 0 gpio CS
-    irq wait 1
-    nop [8]
+    wait 0 gpio A1 side 0
+    wait 0 gpio CS side 0
+    irq wait 1 side 1
+    nop side 1 [8]
     .wrap
 %c-sdk {
+
+#include "hardware/gpio.h"
 
 static inline void wait_cmd_program_init(PIO pio, uint sm, uint offset, uint pin, uint nr_pins) {
   // 1. Define a config object
   pio_sm_config config = hello_program_get_default_config(offset);
 
   // 2. Set and initialize the output pins
+  sm_config_set_in_pins(&config, 8,8);
+  sm_config_set_out_pins(&config, 8,8);
+  sm_config_set_in_shift(&config, true, false, 8);
+  
   sm_config_set_set_pins(&config, pin, 1);
-  sm_config_set_sideset_pins(&config,3);
+  sm_config_set_sideset_pins(&config,LED);
 
   // 3. Apply the configuration & activate the State Machine
   pio_sm_init(pio, sm, offset, &config);
