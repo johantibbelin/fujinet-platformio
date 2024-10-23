@@ -24,27 +24,43 @@ start:
     .wrap_target
     wait 0 gpio A1 side 0
     wait 0 gpio CS side 0
+    in pins,8 side 0
+    push side 0
     irq wait 1 side 1
     nop side 1 [8]
     .wrap
 %c-sdk {
 
 #include "hardware/gpio.h"
+#include "hardware/clocks.h"
+#define LED 26
+#define PIO_HZ 50000
 
-static inline void wait_cmd_program_init(PIO pio, uint sm, uint offset, uint pin, uint nr_pins) {
+static inline void wait_cmd_program_init(PIO pio, uint sm, uint offset, uint pin) {
   // 1. Define a config object
-  pio_sm_config config = hello_program_get_default_config(offset);
+  pio_sm_config config = wait_cmd_program_get_default_config(offset);
 
   // 2. Set and initialize the output pins
-  sm_config_set_in_pins(&config, 8,8);
+  sm_config_set_in_pins(&config, 8);
   sm_config_set_out_pins(&config, 8,8);
   sm_config_set_in_shift(&config, true, false, 8);
   
   sm_config_set_set_pins(&config, pin, 1);
   sm_config_set_sideset_pins(&config,LED);
+  float div = (float)clock_get_hz(clk_sys) / PIO_HZ;
+  sm_config_set_clkdiv(&config, div);
 
   // 3. Apply the configuration & activate the State Machine
   pio_sm_init(pio, sm, offset, &config);
+  pio_gpio_init(pio, 8);
+  pio_gpio_init(pio, 9);
+  pio_gpio_init(pio, 10);
+  pio_gpio_init(pio, 11);
+  pio_gpio_init(pio, 12);
+  pio_gpio_init(pio, 13);
+  pio_gpio_init(pio, 14);
+  pio_gpio_init(pio, 15);
+  pio_gpio_init(pio, LED);
   pio_sm_set_enabled(pio, sm, true);
 }
 %}
