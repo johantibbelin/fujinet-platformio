@@ -29,8 +29,19 @@
  * ACSI is handled by core1
  */
 void core1_entry() {
+    //Core one code goes here
+    sleep_ms(5000);
+    printf("\nCore 1 Started.\n");
+    // Setup PIO
+    printf("Setting up PIO.\n");
+    PIO pio = pio0;
+    uint sm = 0;
+    uint offset = pio_add_program(pio, &wait_cmd_program);
+    wait_cmd_program_init(pio, sm, offset, 6);
+    printf("PIO setup done.\n");
     while (1) {
-        //Core one code goes here
+
+
     }
 }
 
@@ -120,6 +131,8 @@ int main() {
     
     gpio_init(LED_PIN);
     gpio_set_dir(LED_PIN,GPIO_OUT);
+    gpio_put(LED_PIN,1);
+    sleep_ms(1000);
     gpio_put(LED_PIN,0);
     
     printf("Starting Core1 (ACSI handling.)\n \n");
