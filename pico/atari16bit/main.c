@@ -134,13 +134,20 @@ int main() {
     gpio_put(LED_PIN,1);
     sleep_ms(1000);
     gpio_put(LED_PIN,0);
+    sleep_ms(4000);
     
-    printf("Starting Core1 (ACSI handling.)\n \n");
-    multicore_launch_core1(core1_entry);
-    
+    /*printf("Starting Core1 (ACSI handling.)\n \n");
+    multicore_launch_core1(core1_entry);*/
+    printf("Setting up PIO.\n");
+    PIO pio = pio0;
+    uint sm = 0;
+    uint offset = pio_add_program(pio, &wait_cmd_program);
+    wait_cmd_program_init(pio, sm, offset, 6);
+    printf("PIO setup done.\n");
+ 
     while(1) {
      
-        if(!gpio_get(ACSI_A1)) {
+        /*if(!gpio_get(ACSI_A1)) {
            if (!gpio_get(ACSI_CS)) {
               d = 0;  
               for (i=0;i<7;i++) {
@@ -154,11 +161,11 @@ int main() {
                 sleep_us(2);
                 gpio_put(ACSI_IRQ,1);
 
-                /* Get rest of the 5 cdb bytes */
+                // Get rest of the 5 cdb bytes 
               }
            }
             
-        }
+        }*/
     }
     return 0;
 }
