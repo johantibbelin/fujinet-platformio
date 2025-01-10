@@ -22,6 +22,10 @@
 #include "dma_out.pio.h"
 #include "wait_cmd.pio.h"
 
+/**
+ * Bootsector (for testing)
+ */
+#include "bootsector.h"
 
 #define LED_PIN 25
 
