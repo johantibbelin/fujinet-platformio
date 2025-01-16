@@ -27,7 +27,7 @@ start:
     wait 0 gpio CS side 1
     in pins,8 side 0
     ;push side 0
-    ;irq wait 1 side 0
+    irq wait 0 side 0
     wait 1 gpio CS side 0
     set pins,0 side 0
     set y,8 side 0
