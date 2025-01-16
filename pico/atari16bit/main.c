@@ -29,6 +29,10 @@
 
 #define LED_PIN 25
 
+// ACSI ID- id to repond to
+
+#define ACSI_ID 2
+
 /**
  * ACSI is handled by core1
  */
@@ -119,6 +123,23 @@ int setup_acsi_gpio() {
     gpio_put(ACSI_DRQ,1);
 
 } /* setup_acsi_gpio() */
+
+void PIO_IRQ_handler() {
+
+    if (pio_interrupt_get(pio,0)) {
+        uint data = pio_sm_get(pio,0);
+        uint cmd = data & 0x1f
+        uint id = data >> 5
+        printf("id: %h cmd: %h",id,cmd);
+        uint ret = 0;
+        if (id = ACSI_ID) {
+            ret = 5;
+            
+        }
+    pio_sm_put(pio,0,ret);
+    }
+}
+
 
 int main() {
     int i;
