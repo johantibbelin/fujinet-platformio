@@ -33,6 +33,9 @@
 
 #define ACSI_ID 2
 
+// PIO instance global
+
+PIO pio = pio0;
 /**
  * ACSI is handled by core1
  */
@@ -128,8 +131,8 @@ void PIO_IRQ_handler() {
 
     if (pio_interrupt_get(pio,0)) {
         uint data = pio_sm_get(pio,0);
-        uint cmd = data & 0x1f
-        uint id = data >> 5
+        uint cmd = data & 0x1f;
+        uint id = data >> 5;
         printf("id: %h cmd: %h",id,cmd);
         uint ret = 0;
         if (id = ACSI_ID) {
@@ -164,7 +167,7 @@ int main() {
     /*printf("Starting Core1 (ACSI handling.)\n \n");
     multicore_launch_core1(core1_entry);*/
     printf("Setting up PIO.\n");
-    PIO pio = pio0;
+    ;PIO pio = pio0;
     uint sm = 0;
     uint offset = pio_add_program(pio, &wait_cmd_program);
     wait_cmd_program_init(pio, sm, offset, 6);
