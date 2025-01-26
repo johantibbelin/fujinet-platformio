@@ -11,6 +11,7 @@
 #include "hardware/spi.h"
 #include "hardware/dma.h"
 #include "hardware/pio.h"
+#include "hardware/irq.h"
 
 #include "pinmap.h"
 
@@ -133,13 +134,14 @@ void PIO_IRQ_handler() {
         uint data = pio_sm_get(pio,0);
         uint cmd = data & 0x1f;
         uint id = data >> 5;
-        printf("id: %h cmd: %h",id,cmd);
+        printf("id: %x cmd: %x",id,cmd);
         uint ret = 0;
         if (id = ACSI_ID) {
             ret = 5;
             
         }
     pio_sm_put(pio,0,ret);
+    pio_interrupt_clear(pio,0);
     }
 }
 
@@ -167,14 +169,39 @@ int main() {
     /*printf("Starting Core1 (ACSI handling.)\n \n");
     multicore_launch_core1(core1_entry);*/
     printf("Setting up PIO.\n");
-    ;PIO pio = pio0;
+    //PIO pio = pio0;
     uint sm = 0;
     uint offset = pio_add_program(pio, &wait_cmd_program);
     wait_cmd_program_init(pio, sm, offset, 6);
+    /* Setup interrupt and handler */
+    pio_set_irq0_source_enabled(pio, pis_interrupt0, true); // sets IRQ0
+    
+    irq_set_exclusive_handler(PIO0_IRQ_0, PIO_IRQ_handler);  //Set the handler in the NVIC
+    irq_set_enabled(0, true); 
     printf("PIO setup done.\n");
- 
+    uint8_t data[6*8];
+    uint8_t ad,aid,acmd;
     while(1) {
-     
+    wait_cmd:
+    ad = (uint8_t)pio_sm_get_blocking(pio,0);
+    acmd = ad & 0x1f;
+    aid = ad >> 5;
+    if (aid == ACSI_ID) {
+        pio_sm_put(pio,0,5); // Five more bytes to read
+        data[0]=ad;
+    }
+    else {
+        pio_sm_put(pio,0,0); // Ignore command
+        goto wait_cmd;
+    }
+    // Read aditional bytes
+
+    for (int i=1;i<6;i++) { 
+        data[i]= (uint8_t)pio_sm_get_blocking(pio,0);
+    }
+    for (int i=0;i<6;i++) {
+        printf("0x%02x, ",data[i]);
+    }
         /*if(!gpio_get(ACSI_A1)) {
            if (!gpio_get(ACSI_CS)) {
               d = 0;  

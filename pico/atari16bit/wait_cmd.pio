@@ -25,19 +25,27 @@ start:
     .wrap_target
     wait 0 gpio A1 side 1
     wait 0 gpio CS side 1
-    in pins,8 side 0
+    nop side 0; temp
+    ;in pins,8 side 0
     ;push side 0
     wait 1 gpio CS side 0
-    set x,4 side 0
+    in pins,8 side 0
+    ;push side 0
     ;irq wait 0 side 0
+    ;set x,5 side 0
     ; If X zero return to start
-    ;mov x,osr side 0
-    ;jmp !X,start side 0
-    ;jmp send_irq
+    pull side 0
+    mov x,osr side 1
+    jmp !x,start side 0
+    jmp send_irq side 0
 cmd_l:
     wait 0 gpio CS side 1
+    nop side 0; temp
     in pins,8 side 0  
+    ;push side 0
     wait 1 gpio CS side 0
+    nop side 0 [15]
+    nop side 0 [15]
 send_irq:
     set pins,0 side 0
     set y,8 side 0
@@ -67,13 +75,13 @@ static inline void wait_cmd_program_init(PIO pio, uint sm, uint offset, uint pin
   // 2. Set and initialize the output pins
   sm_config_set_in_pins(&config, 8);
   sm_config_set_out_pins(&config, 8,8);
-  sm_config_set_in_shift(&config, true, false, 8);
+  ;sm_config_set_in_shift(&config, true, false, 8);
   
   sm_config_set_set_pins(&config, pin, 1);
   sm_config_set_sideset_pins(&config,25);
   
-  sm_config_set_in_shift(&config, true, true,8);
-  sm_config_set_out_shift(&config, true,true,8);
+  sm_config_set_in_shift(&config, false, true,8);
+  sm_config_set_out_shift(&config, true,false,8);
   
   float div = (float)clock_get_hz(clk_sys) / PIO_HZ;
   printf("PIO div is: %2.2f\n",div);
@@ -94,7 +102,8 @@ static inline void wait_cmd_program_init(PIO pio, uint sm, uint offset, uint pin
   pio_sm_set_consecutive_pindirs(pio,sm, 25, 1, true);
   pio_sm_set_consecutive_pindirs(pio,sm,8,8,false);
   pio_sm_set_consecutive_pindirs(pio,sm,6,1,true);
-  pio_set_irq0_source_enabled(pio,pis_interrupt0,true);
+  ;pio_set_irq0_source_enabled(pio,pis_interrupt0,true);
+  
   pio_sm_set_enabled(pio, sm, true);
 }
 %}
