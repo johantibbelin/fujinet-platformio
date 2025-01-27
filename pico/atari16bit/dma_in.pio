@@ -23,10 +23,11 @@
 
 start:
     .wrap_target
-    nop side 0
+    set pins,0 ;Pull DRQ
     wait 0 gpio ACK
-    in pins,8 side 1
-    push
+    nop [4]
+    in pins,8
+    wait 1 gpio ACK
     .wrap
     
 %c-sdk {

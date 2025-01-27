@@ -4,7 +4,7 @@
 ;------------------------------------------------------
 ; Written by Johan Tibbelin (sjfroos)
 ;
-
+; Waits for data then pulls DRQ low
 ; ACSI ID to look for
 .define ID 3 
 
@@ -14,8 +14,10 @@
 .define A1 4
 .define ACK 26
 .define DRQ 4
-
-.program acsi_dma_out
+;
+; DMA out in picos point of view
+;
+.program acsi_dma_out 
 ;.side_set 1; Program waits for A1 and CS LOW then throws interrupt
 
 ;Sideset is used for _IRQ signal
@@ -23,10 +25,12 @@
 
 start:
     .wrap_target
-    nop side 0
-    wait 0 gpio ACK
-    in pins,8 side 1
-    push
+    out pins,8
+    set pins,0 ; pull DRQ low
+    wait 0 gpio ACK ;wait for ACK
+    nop [8]
+    set pins,0
+    wait 1 gpio ACK
     .wrap
     
 %c-sdk {
