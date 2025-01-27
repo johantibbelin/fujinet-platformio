@@ -26,6 +26,7 @@ start:
     set pins,0 ;Pull DRQ
     wait 0 gpio ACK
     nop [4]
+    set pins,1
     in pins,8
     wait 1 gpio ACK
     .wrap
