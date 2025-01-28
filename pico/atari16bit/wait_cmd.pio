@@ -32,9 +32,14 @@ start:
     mov x,osr side 1
     jmp !x,start side 0
 send_irq:
+    nop [15] side 0
+    nop [15] side 0
+    nop [15] side 0
+    nop [15] side 0
     set pins,0 side 0 ;set IRQ to low
-    set y,8 side 0
-    w8: ;wait loop
+    set y,7 side 0
+    ;wait loop
+w8:
     nop side 0 [15]
     nop side 0 [15]
     jmp y--,w8 side 0

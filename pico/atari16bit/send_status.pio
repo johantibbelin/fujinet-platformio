@@ -16,8 +16,8 @@
 .define ACK 21
 .define RW 26
 .define LED 25
-.program wait_cmd
-.side_set 1 opt; Program waits for A1 and CS LOW then throws interrupt
+.program send_status
+;.side_set 1 opt; Program waits for A1 and CS LOW then throws interrupt
 
 
 start:
@@ -36,8 +36,8 @@ send_irq:
     ;nop side 0 [15]
     ;nop side 0 [15]
     set pins,1 side 0
-    wait gpio CS 0
-    wait gpio CS 1
+    wait 0 gpio CS 
+    wait 1 gpio CS 
     .wrap
 %c-sdk {
 
@@ -47,7 +47,7 @@ send_irq:
 // PIO Freq 50 MHz (20ns per clock cycle)
 #define PIO_HZ 50000000
 
-static inline void wait_cmd_program_init(PIO pio, uint sm, uint offset, uint pin) {
+static inline send_status_program_init(PIO pio, uint sm, uint offset, uint pin) {
   // 1. Define a config object
   pio_sm_config config = wait_cmd_program_get_default_config(offset);
 
