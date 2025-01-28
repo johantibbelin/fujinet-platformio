@@ -22,6 +22,7 @@
 #include "dma_in.pio.h"
 #include "dma_out.pio.h"
 #include "wait_cmd.pio.h"
+#include "send_status.pio.h"
 
 /**
  * Bootsector (for testing)
@@ -187,7 +188,7 @@ int main() {
     acmd = ad & 0x1f;
     aid = ad >> 5;
     if (aid == ACSI_ID) {
-        pio_sm_put(pio,0,5); // Five more bytes to read
+        pio_sm_put(pio,0,4); // Five more bytes to read
         data[0]=ad;
     }
     else {
