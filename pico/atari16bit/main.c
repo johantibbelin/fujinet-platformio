@@ -38,6 +38,7 @@
 // PIO instance global
 
 PIO pio = pio0;
+PIO pio_dma = pio1;
 /**
  * ACSI is handled by core1
  */
@@ -129,6 +130,30 @@ int setup_acsi_gpio() {
 
 } /* setup_acsi_gpio() */
 
+/* Functions for switching PIO instance */
+
+void acsi_dma_out_enable(PIO pio,uint sm) {
+  pio_gpio_init(pio,8);
+  pio_gpio_init(pio,9);
+  pio_gpio_init(pio,10);
+  pio_gpio_init(pio,11);
+  pio_gpio_init(pio,12);
+  pio_gpio_init(pio,13);
+  pio_gpio_init(pio,14);
+  pio_gpio_init(pio,15);
+  pio_sm_set_consecutive_pindirs(pio,sm,8,8,true);
+  pio_sm_set_enabled(pio, sm, true);
+}
+void acsi_dma_out_disable(PIO pio,uint sm) {
+  pio_sm_set_consecutive_pindirs(pio,sm,8,8,false);
+  pio_sm_set_enabled(pio, sm, false);
+  for(int i=ACSI_D0;i<=ACSI_D7;i++) {
+    gpio_init(i);
+    gpio_set_dir(i,GPIO_IN);
+    gpio_disable_pulls(i);
+    }
+}
+
 void PIO_IRQ_handler() {
 
     if (pio_interrupt_get(pio,0)) {
@@ -170,15 +195,25 @@ int main() {
     /*printf("Starting Core1 (ACSI handling.)\n \n");
     multicore_launch_core1(core1_entry);*/
     printf("Setting up PIO.\n");
-    //PIO pio = pio0;
-    uint sm = 0;
-    uint offset = pio_add_program(pio, &wait_cmd_program);
-    wait_cmd_program_init(pio, sm, offset, 6);
-    /* Setup interrupt and handler */
-    pio_set_irq0_source_enabled(pio, pis_interrupt0, true); // sets IRQ0
     
-    irq_set_exclusive_handler(PIO0_IRQ_0, PIO_IRQ_handler);  //Set the handler in the NVIC
-    irq_set_enabled(0, true); 
+    //Setup ACSI cmd program on pio0
+    uint sm = 0;
+    uint offset = pio_add_program(pio_dma,&acsi_dma_out_program);
+    acsi_dma_out_program_init(pio_dma,sm,offset,ACSI_DRQ);
+
+    offset = pio_add_program(pio, &wait_cmd_program);
+    wait_cmd_program_init(pio, sm, offset, ACSI_IRQ);
+
+    /* Setup interrupt and handler */
+    //pio_set_irq0_source_enabled(pio, pis_interrupt0, true); // sets IRQ0
+    
+    //irq_set_exclusive_handler(PIO0_IRQ_0, PIO_IRQ_handler);  //Set the handler in the NVIC
+    //irq_set_enabled(0, true);
+    
+    // Setup dma and Status_byte PIO porgrams on pio1
+    //offset = pio_add_program(pio_dma,&acsi_dma_out_program);
+    //acsi_dma_out_program_init(pio_dma,sm,offset,ACSI_DRQ);
+
     printf("PIO setup done.\n");
     uint8_t data[6*8];
     uint8_t ad,aid,acmd;
@@ -200,6 +235,16 @@ int main() {
     for (int i=1;i<6;i++) { 
         data[i]= (uint8_t)pio_sm_get_blocking(pio,0);
     }
+    //Setup dma and send 16 bytes
+    gpio_put(ACSI_D_DIR,0);  /* HIGH = INPUT */
+    pio_sm_set_consecutive_pindirs(pio_dma,0,8,8,true);
+    //acsi_dma_out_enable(pio_dma,0);
+    for (int i=0;i<16;i++) {
+        pio_sm_put(pio_dma, 0,_fuji2bootsector[i]);
+    }
+    gpio_put(ACSI_D_DIR,1);
+    pio_sm_set_consecutive_pindirs(pio_dma, 0, 8, 8,false);
+    //acsi_dma_out_disable(pio_dma,0);
     for (int i=0;i<6;i++) {
         printf("0x%02x, ",data[i]);
     }

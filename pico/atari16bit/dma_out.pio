@@ -12,7 +12,7 @@
 .define AIRQ 3
 .define CS 0x1b
 .define A1 4
-.define ACK 26
+.define ACK 21
 .define DRQ 4
 ;
 ; DMA out in picos point of view
@@ -24,27 +24,82 @@
 ;.side_set 1 opt
 
 start:
+    set pins,1
     .wrap_target
     out pins,8
     set pins,0 ; pull DRQ low
     wait 0 gpio ACK ;wait for ACK
-    nop [8]
-    set pins,0
+    nop [9]
+    set pins,1
     wait 1 gpio ACK
     .wrap
     
 %c-sdk {
+#include "hardware/gpio.h"
+#include "hardware/clocks.h"
+//#include "pinmap.h"
+#define LED 25
+// PIO Freq 50 MHz (20ns per clock cycle)
+#define PIO_HZ 50000000
 
-static inline void acsi_dma_out_program_init(PIO pio, uint sm, uint offset, uint pin, uint nr_pins) {
+static inline void acsi_dma_out_program_init(PIO pio, uint sm, uint offset, uint pin) {
   // 1. Define a config object
   pio_sm_config config = acsi_dma_out_program_get_default_config(offset);
 
   // 2. Set and initialize the output pins
+  sm_config_set_in_pins(&config, 8);
+  sm_config_set_out_pins(&config, 8,8);
+  ;sm_config_set_in_shift(&config, true, false, 8);
+  
   sm_config_set_set_pins(&config, pin, 1);
-  sm_config_set_sideset_pins(&config,3);
-
+  ;sm_config_set_sideset_pins(&config,25);
+  
+  sm_config_set_in_shift(&config, false, true,8);
+  sm_config_set_out_shift(&config, true,false,8);
+  
+  float div = (float)clock_get_hz(clk_sys) / PIO_HZ;
+  printf("DMA out PIO div is: %2.2f\n",div);
+  sm_config_set_clkdiv(&config, div);
+  
   // 3. Apply the configuration & activate the State Machine
   pio_sm_init(pio, sm, offset, &config);
+  pio_gpio_init(pio,4); //DRQ
+  pio_gpio_init(pio, 21); //ACK
+  pio_gpio_init(pio, 8);
+  pio_gpio_init(pio, 9);
+  pio_gpio_init(pio, 10);
+  pio_gpio_init(pio, 11);
+  pio_gpio_init(pio, 12);
+  pio_gpio_init(pio, 13);
+  pio_gpio_init(pio, 14);
+  pio_gpio_init(pio, 15);
+  pio_gpio_init(pio, 25);
+  pio_sm_set_consecutive_pindirs(pio,sm, 21, 1, false);
+  pio_sm_set_consecutive_pindirs(pio,sm,8,8,false);
+  pio_sm_set_consecutive_pindirs(pio,sm,4,1,true);
+  ;pio_set_irq0_source_enabled(pio,pis_interrupt0,true);
+  
   pio_sm_set_enabled(pio, sm, true);
 }
+
+/*void acsi_dma_out_enable(PIO pio,uint sm) {
+  pio_gpio_init(pio,8);
+  pio_gpio_init(pio,9);
+  pio_gpio_init(pio,10);
+  pio_gpio_init(pio,11);
+  pio_gpio_init(pio,12);
+  pio_gpio_init(pio,13);
+  pio_gpio_init(pio,14);
+  pio_gpio_init(pio,15);
+  pio_sm_set_consecutive_pindirs(pio,sm,8,8,true);
+  pio_sm_set_enabled(pio, sm, true);
+}
+void acsi_dma_out_disable(PIO pio,uint sm) {
+  pio_sm_set_consecutive_pindirs(pio,sm,8,8,false);
+  pio_sm_set_enabled(pio, sm, false);
+  for(int i=8;i<=15;i++) {
+    gpio_init(i);
+    gpio_set_dir(i,GPIO_IN);
+    gpio_disable_pulls(i);
+}*/
 %}
