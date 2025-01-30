@@ -21,17 +21,19 @@
 ;.side_set 1; Program waits for A1 and CS LOW then throws interrupt
 
 ;Sideset is used for _IRQ signal
-;.side_set 1 opt
+.side_set 1
 
 start:
-    set pins,1
+    nop side 1
     .wrap_target
-    out pins,8
-    set pins,0 ; pull DRQ low
-    wait 0 gpio ACK ;wait for ACK
-    nop [9]
-    set pins,1
-    wait 1 gpio ACK
+    pull side 1
+    out pins,8 side 1
+    nop side 0 ; pull DRQ low
+    wait 0 gpio ACK side 0;wait for ACK
+    nop [9] side 0
+    nop side 1
+    wait 1 gpio ACK side 1
+    nop [9] side 1
     .wrap
     
 %c-sdk {
@@ -51,8 +53,8 @@ static inline void acsi_dma_out_program_init(PIO pio, uint sm, uint offset, uint
   sm_config_set_out_pins(&config, 8,8);
   ;sm_config_set_in_shift(&config, true, false, 8);
   
-  sm_config_set_set_pins(&config, pin, 1);
-  ;sm_config_set_sideset_pins(&config,25);
+  ;sm_config_set_set_pins(&config, pin, 1);
+  sm_config_set_sideset_pins(&config,4);
   
   sm_config_set_in_shift(&config, false, true,8);
   sm_config_set_out_shift(&config, true,false,8);
@@ -77,6 +79,7 @@ static inline void acsi_dma_out_program_init(PIO pio, uint sm, uint offset, uint
   pio_sm_set_consecutive_pindirs(pio,sm, 21, 1, false);
   pio_sm_set_consecutive_pindirs(pio,sm,8,8,false);
   pio_sm_set_consecutive_pindirs(pio,sm,4,1,true);
+  pio_sm_set_pins_with_mask(pio, sm,0x10,0x10);
   ;pio_set_irq0_source_enabled(pio,pis_interrupt0,true);
   
   pio_sm_set_enabled(pio, sm, true);

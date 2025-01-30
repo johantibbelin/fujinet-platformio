@@ -240,8 +240,9 @@ int main() {
     pio_sm_set_consecutive_pindirs(pio_dma,0,8,8,true);
     //acsi_dma_out_enable(pio_dma,0);
     for (int i=0;i<16;i++) {
-        pio_sm_put(pio_dma, 0,_fuji2bootsector[i]);
+        pio_sm_put_blocking(pio_dma, 0,_fuji2bootsector[i]);
     }
+    
     gpio_put(ACSI_D_DIR,1);
     pio_sm_set_consecutive_pindirs(pio_dma, 0, 8, 8,false);
     //acsi_dma_out_disable(pio_dma,0);
