@@ -35,10 +35,11 @@
 
 #define ACSI_ID 2
 
-// PIO instance global
+// PIO instances global
 
 PIO pio = pio0;
 PIO pio_dma = pio1;
+PIO pio_snd_status =pio1;
 /**
  * ACSI is handled by core1
  */
@@ -197,12 +198,13 @@ int main() {
     printf("Setting up PIO.\n");
     
     //Setup ACSI cmd program on pio0
-    uint sm = 0;
-    uint offset = pio_add_program(pio_dma,&acsi_dma_out_program);
-    acsi_dma_out_program_init(pio_dma,sm,offset,ACSI_DRQ);
+    uint sm_dma = 0;
+    uint offset_dma = pio_add_program(pio_dma,&acsi_dma_out_program);
+    acsi_dma_out_program_init(pio_dma,sm_dma, offset_dma,ACSI_DRQ);
 
-    offset = pio_add_program(pio, &wait_cmd_program);
-    wait_cmd_program_init(pio, sm, offset, ACSI_IRQ);
+    uint sm_cmd=0;
+    uint offset_cmd = pio_add_program(pio, &wait_cmd_program);
+    wait_cmd_program_init(pio, sm_cmd, offset_cmd, ACSI_IRQ);
 
     /* Setup interrupt and handler */
     //pio_set_irq0_source_enabled(pio, pis_interrupt0, true); // sets IRQ0
@@ -239,10 +241,10 @@ int main() {
     gpio_put(ACSI_D_DIR,0);  /* HIGH = INPUT */
     pio_sm_set_consecutive_pindirs(pio_dma,0,8,8,true);
     //acsi_dma_out_enable(pio_dma,0);
-    for (int i=0;i<16;i++) {
+    for (int i=0;i<512;i++) {
         pio_sm_put_blocking(pio_dma, 0,_fuji2bootsector[i]);
     }
-    
+    sleep_us(12); // wait for dma to finnish
     gpio_put(ACSI_D_DIR,1);
     pio_sm_set_consecutive_pindirs(pio_dma, 0, 8, 8,false);
     //acsi_dma_out_disable(pio_dma,0);
