@@ -58,3 +58,4 @@ fujinet_releases/*
 *~
 *.orig
 *.rej
+pico/atari16bit/dummy.c
