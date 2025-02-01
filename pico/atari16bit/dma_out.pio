@@ -26,14 +26,14 @@
 start:
     nop side 1
     .wrap_target
-    pull side 1
+    ;pull side 1
     out pins,8 side 1
-    nop side 0 ; pull DRQ low
+    nop [8] side 0 ; pull DRQ low
     wait 0 gpio ACK side 0;wait for ACK
-    nop [9] side 0
+    nop [8] side 0
     nop side 1
     wait 1 gpio ACK side 1
-    nop [9] side 1
+    nop [8] side 1
     .wrap
     
 %c-sdk {
@@ -57,8 +57,9 @@ static inline void acsi_dma_out_program_init(PIO pio, uint sm, uint offset, uint
   sm_config_set_sideset_pins(&config,4);
   
   sm_config_set_in_shift(&config, false, true,8);
-  sm_config_set_out_shift(&config, true,false,8);
-  
+  sm_config_set_out_shift(&config, true,true,8);
+  //sm_config_set_fifo_join(&config, PIO_FIFO_JOIN_TX);
+
   float div = (float)clock_get_hz(clk_sys) / PIO_HZ;
   printf("DMA out PIO div is: %2.2f\n",div);
   sm_config_set_clkdiv(&config, div);
