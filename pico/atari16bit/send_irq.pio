@@ -16,28 +16,28 @@
 .define ACK 21
 .define RW 26
 .define LED 25
-.program wait_cmd
-.side_set 1; Program waits for A1 and CS LOW then throws interrupt
+.program send_irq
+.side_set 1
 
 
 start:
+    set pins,1 side 1
     .wrap_target
-    wait 0 gpio A1 side 1
-
-    wait 0 gpio CS side 1
-    wait 1 gpio CS side 0
-    in pins,8 side 0
-    pull side 0
-    mov x,osr side 1
-    jmp !x,start side 0
+    wait 1 irq 4
 send_irq:
-
-    irq wait 4 side 0
-
-    wait 0 gpio CS side 1
-    wait 1 gpio CS side 0
-    in pins,8 side 0
-    jmp x--,send_irq side 0
+    nop [15] side 0
+    nop [15] side 0
+    nop [15] side 0
+    nop [15] side 0
+    set pins,0 side 0 ;set IRQ to low
+    set y,7 side 0
+    ;wait loop
+w8:
+    nop side 0 [15]
+    nop side 0 [15]
+    jmp y--,w8 side 0
+    set pins,1 side 0
+    irq clear 4
     .wrap
 %c-sdk {
 
@@ -52,36 +52,23 @@ static inline void wait_cmd_program_init(PIO pio, uint sm, uint offset, uint pin
   pio_sm_config config = wait_cmd_program_get_default_config(offset);
 
   // 2. Set and initialize the output pins
-  sm_config_set_in_pins(&config, 8);
+  //sm_config_set_in_pins(&config, 8);
   sm_config_set_out_pins(&config, 8,8);
-  ;sm_config_set_in_shift(&config, true, false, 8);
   
   sm_config_set_set_pins(&config, pin, 1);
-  sm_config_set_sideset_pins(&config,25);
+  sm_config_set_sideset_pins(&config,6);
   
   sm_config_set_in_shift(&config, false, true,8);
   sm_config_set_out_shift(&config, true,false,8);
   
   float div = (float)clock_get_hz(clk_sys) / PIO_HZ;
-  printf("Wait CMD PIO div is: %2.2f\n",div);
+  printf("Send IRQ PIO div is: %2.2f\n",div);
   sm_config_set_clkdiv(&config, div);
   
   // 3. Apply the configuration & activate the State Machine
   pio_sm_init(pio, sm, offset, &config);
   pio_gpio_init(pio,6);
-  /*pio_gpio_init(pio, 8);
-  pio_gpio_init(pio, 9);
-  pio_gpio_init(pio, 10);
-  pio_gpio_init(pio, 11);
-  pio_gpio_init(pio, 12);
-  pio_gpio_init(pio, 13);
-  pio_gpio_init(pio, 14);
-  pio_gpio_init(pio, 15);*/
-  pio_gpio_init(pio, 25);
-  pio_sm_set_consecutive_pindirs(pio,sm, 25, 1, true);
-  ;pio_sm_set_consecutive_pindirs(pio,sm,8,8,false);
   pio_sm_set_consecutive_pindirs(pio,sm,6,1,true);
-  ;pio_set_irq0_source_enabled(pio,pis_interrupt0,true);
   
   pio_sm_set_enabled(pio, sm, true);
 }
