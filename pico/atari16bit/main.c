@@ -197,6 +197,9 @@ int main() {
     multicore_launch_core1(core1_entry);*/
     printf("Setting up PIO.\n");
     
+    uint sm_snd_status = 1;
+    uint offset_snd_status = pio_add_program(pio_snd_status, &send_status_program);
+    send_status_program_init(pio_snd_status, sm_snd_status, offset_snd_status, ACSI_IRQ);
     //Setup ACSI cmd program on pio0
     uint sm_dma = 0;
     uint offset_dma = pio_add_program(pio_dma,&acsi_dma_out_program);
@@ -245,6 +248,12 @@ int main() {
         pio_sm_put_blocking(pio_dma, 0,_fuji2bootsector[i]);
     }
     sleep_us(12); // wait for dma to finnish
+
+    //pio_gpio_init(pio_snd_status,ACSI_IRQ);
+    pio_sm_put_blocking(pio_snd_status,sm_snd_status,0); //status ok
+    //sleep_us(10);
+    pio_sm_put_blocking(pio,0,1);
+    sleep_us(15);
     gpio_put(ACSI_D_DIR,1);
     pio_sm_set_consecutive_pindirs(pio_dma, 0, 8, 8,false);
     //acsi_dma_out_disable(pio_dma,0);
