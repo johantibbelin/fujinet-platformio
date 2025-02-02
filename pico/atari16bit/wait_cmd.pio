@@ -53,6 +53,12 @@ w8:
     wait 1 gpio CS side 0
     in pins,8 side 0
     jmp x--,send_irq side 0
+    pull side 0
+    set pins,0 side 0
+    wait 0 gpio CS side 0
+    wait 1 gpio CS side 0
+    nop [8] side 0
+    set pins,1 side 0
     .wrap
 %c-sdk {
 
