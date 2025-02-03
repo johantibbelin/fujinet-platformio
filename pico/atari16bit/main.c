@@ -31,11 +31,16 @@
 #include "bootsector.h"
 
 #define LED_PIN 25
+
+/* UART pins connected to ESP32 */
+#define ESP32_UART_TX 4
+#define ESP32_UART_RX 5
+
 /**
  * ACSI stuff
  */
-//ACSI Bus Direction
 
+//ACSI Bus Direction (for use with ACSI_D_DIR pin)
 #define ACSI_BUS_INPUT 1
 #define ACSI_BUS_OUTPUT 0
 

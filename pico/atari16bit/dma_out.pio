@@ -66,7 +66,7 @@ static inline void acsi_dma_out_program_init(PIO pio, uint sm, uint offset, uint
   
   // 3. Apply the configuration & activate the State Machine
   pio_sm_init(pio, sm, offset, &config);
-  pio_gpio_init(pio,4); //DRQ
+  pio_gpio_init(pio,3); //DRQ
   pio_gpio_init(pio, 21); //ACK
   pio_gpio_init(pio, 8);
   pio_gpio_init(pio, 9);
@@ -86,24 +86,4 @@ static inline void acsi_dma_out_program_init(PIO pio, uint sm, uint offset, uint
   pio_sm_set_enabled(pio, sm, true);
 }
 
-/*void acsi_dma_out_enable(PIO pio,uint sm) {
-  pio_gpio_init(pio,8);
-  pio_gpio_init(pio,9);
-  pio_gpio_init(pio,10);
-  pio_gpio_init(pio,11);
-  pio_gpio_init(pio,12);
-  pio_gpio_init(pio,13);
-  pio_gpio_init(pio,14);
-  pio_gpio_init(pio,15);
-  pio_sm_set_consecutive_pindirs(pio,sm,8,8,true);
-  pio_sm_set_enabled(pio, sm, true);
-}
-void acsi_dma_out_disable(PIO pio,uint sm) {
-  pio_sm_set_consecutive_pindirs(pio,sm,8,8,false);
-  pio_sm_set_enabled(pio, sm, false);
-  for(int i=8;i<=15;i++) {
-    gpio_init(i);
-    gpio_set_dir(i,GPIO_IN);
-    gpio_disable_pulls(i);
-}*/
 %}
