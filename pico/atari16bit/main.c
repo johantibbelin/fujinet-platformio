@@ -34,6 +34,10 @@
 /**
  * ACSI stuff
  */
+//ACSI Bus Direction
+
+#define ACSI_BUS_INPUT 1
+#define ACSI_BUS_OUTPUT 0
 
 /* ACSI Commands*/
 #define CMD_TEST_UNIT_READY 0x00
@@ -197,8 +201,8 @@ int acsi_write_status(uint status) {
 int send_dummy_bootsector() {
     
     //Set bus to output
-    gpio_put(ACSI_D_DIR,0);  /* HIGH = INPUT */
-    pio_sm_set_consecutive_pindirs(pio_dma,0,8,8,true);
+    gpio_put(ACSI_D_DIR,ACSI_BUS_OUTPUT);  /* HIGH = INPUT */
+    pio_sm_set_consecutive_pindirs(pio_dma,0,ACSI_D0,8,true);
     //Send bootsector over bus
     for (int i=0;i<512;i++) {
         pio_sm_put_blocking(pio_dma, 0,_fuji2bootsector[i]);
@@ -209,8 +213,8 @@ int send_dummy_bootsector() {
     pio_sm_put_blocking(pio_snd_status,sm_snd_status,ERROR_OK);
     sleep_us(15); //Wait a bit
     // Return bus to input
-    gpio_put(ACSI_D_DIR,1);
-    pio_sm_set_consecutive_pindirs(pio_dma, 0, 8, 8,false);
+    gpio_put(ACSI_D_DIR,ACSI_BUS_INPUT);
+    pio_sm_set_consecutive_pindirs(pio_dma, 0, ACSI_D0, 8,false);
 
     return 0;
 }
