@@ -24,6 +24,7 @@
 #include "dma_out.pio.h"
 #include "wait_cmd.pio.h"
 #include "send_status.pio.h"
+#include "send_irq.pio.h"
 
 /**
  * Bootsector (for testing)
@@ -88,8 +89,8 @@ PIO pio_snd_irq = pio0;
 
 uint sm_snd_status = 1;
 uint sm_dma = 0;
-uint sm_cmd=0;
-
+uint sm_cmd = 0;
+uint sm_snd_irq = 1;
 /**
  * Serial is handled by core1
  */
@@ -193,8 +194,8 @@ void PIO_IRQ_handler() {
 uint get_device_number(uint d) {
     return d >> 5;
 }
-int get_block_address(uind, dh,dm,dl) {
-    int a=0;
+uint get_block_address(uint dh,uint dm,uint dl) {
+    uint a=0;
     a = ((dh & 0x1f) << 16 ) | (dm << 8) | dl;
     return a; 
 }
@@ -253,11 +254,15 @@ int main() {
     uint offset_snd_status = pio_add_program(pio_snd_status, &send_status_program);
     send_status_program_init(pio_snd_status, sm_snd_status, offset_snd_status, ACSI_IRQ);
     //Setup ACSI cmd program on pio0
-     uint offset_dma = pio_add_program(pio_dma,&acsi_dma_out_program);
+    uint offset_dma = pio_add_program(pio_dma,&acsi_dma_out_program);
     acsi_dma_out_program_init(pio_dma,sm_dma, offset_dma,ACSI_DRQ);
 
-     uint offset_cmd = pio_add_program(pio, &wait_cmd_program);
+    uint offset_cmd = pio_add_program(pio, &wait_cmd_program);
     wait_cmd_program_init(pio, sm_cmd, offset_cmd, ACSI_IRQ);
+    
+    uint offset_snd_irq = pio_add_program(pio, &send_irq_program);
+    send_irq_program_init(pio_snd_irq, sm_snd_irq, offset_cmd, ACSI_IRQ);
+
 
     printf("PIO setup done.\n");
     uint8_t data[6*8];

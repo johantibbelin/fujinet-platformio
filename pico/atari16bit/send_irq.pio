@@ -23,7 +23,7 @@
 start:
     set pins,1 side 1
     .wrap_target
-    wait 1 irq 4
+    wait 1 irq 4 side 1
 send_irq:
     nop [15] side 0
     nop [15] side 0
@@ -36,8 +36,8 @@ w8:
     nop side 0 [15]
     nop side 0 [15]
     jmp y--,w8 side 0
-    set pins,1 side 0
-    irq clear 4
+    set pins,1 side 1
+    irq clear 4 side 1
     .wrap
 %c-sdk {
 
