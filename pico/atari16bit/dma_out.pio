@@ -54,7 +54,7 @@ static inline void acsi_dma_out_program_init(PIO pio, uint sm, uint offset, uint
   ;sm_config_set_in_shift(&config, true, false, 8);
   
   ;sm_config_set_set_pins(&config, pin, 1);
-  sm_config_set_sideset_pins(&config,4);
+  sm_config_set_sideset_pins(&config,3);
   
   sm_config_set_in_shift(&config, false, true,8);
   sm_config_set_out_shift(&config, true,true,8);
@@ -66,7 +66,7 @@ static inline void acsi_dma_out_program_init(PIO pio, uint sm, uint offset, uint
   
   // 3. Apply the configuration & activate the State Machine
   pio_sm_init(pio, sm, offset, &config);
-  pio_gpio_init(pio,4); //DRQ
+  pio_gpio_init(pio,3); //DRQ
   pio_gpio_init(pio, 21); //ACK
   pio_gpio_init(pio, 8);
   pio_gpio_init(pio, 9);
@@ -79,7 +79,7 @@ static inline void acsi_dma_out_program_init(PIO pio, uint sm, uint offset, uint
   pio_gpio_init(pio, 25);
   pio_sm_set_consecutive_pindirs(pio,sm, 21, 1, false);
   pio_sm_set_consecutive_pindirs(pio,sm,8,8,false);
-  pio_sm_set_consecutive_pindirs(pio,sm,4,1,true);
+  pio_sm_set_consecutive_pindirs(pio,sm,3,1,true);
   pio_sm_set_pins_with_mask(pio, sm,0x10,0x10);
   ;pio_set_irq0_source_enabled(pio,pis_interrupt0,true);
   

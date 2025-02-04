@@ -11,7 +11,7 @@
 #define ACSI_D7 15
 
 /* Control pins*/
-#define ACSI_D_DIR 5 /* DIR pin on 74LS641-1 */
+#define ACSI_D_DIR 7 /* DIR pin on 74LS641-1 */
 
 #define ACSI_CS 2
 #define ACSI_IRQ 6
@@ -19,5 +19,5 @@
 #define ACSI_ACK 21
 #define ACSI_A1 22
 #define ACSI_RW 26
-#define ACSI_DRQ 4
+#define ACSI_DRQ 3
 #endif /* PINMAP_H */
