@@ -201,7 +201,7 @@ int main() {
     uint offset_snd_status = pio_add_program(pio_snd_status, &send_status_program);
     send_status_program_init(pio_snd_status, sm_snd_status, offset_snd_status, ACSI_IRQ);
     //Setup ACSI cmd program on pio0
-    uint sm_dma = 0;
+    uint sm_dma = 1;
     uint offset_dma = pio_add_program(pio_dma,&acsi_dma_out_program);
     acsi_dma_out_program_init(pio_dma,sm_dma, offset_dma,ACSI_DRQ);
 
@@ -224,6 +224,7 @@ int main() {
     uint8_t ad,aid,acmd;
     while(1) {
     wait_cmd:
+
     ad = (uint8_t)pio_sm_get_blocking(pio,0);
     acmd = ad & 0x1f;
     aid = ad >> 5;
@@ -242,24 +243,30 @@ int main() {
     }
     //Setup dma and send 16 bytes
     gpio_put(ACSI_D_DIR,0);  /* HIGH = INPUT */
-    pio_sm_set_consecutive_pindirs(pio_dma,0,8,8,true);
+    pio_sm_set_consecutive_pindirs(pio_dma,sm_dma,8,8,true);
     //acsi_dma_out_enable(pio_dma,0);
     for (int i=0;i<512;i++) {
-        pio_sm_put_blocking(pio_dma, 0,_fuji2bootsector[i]);
+        pio_sm_put_blocking(pio_dma, sm_dma,(_fuji2bootsector[i]));
     }
     sleep_us(12); // wait for dma to finnish
 
     //pio_gpio_init(pio_snd_status,ACSI_IRQ);
     pio_sm_put_blocking(pio_snd_status,sm_snd_status,0); //status ok
     //sleep_us(10);
-    pio_sm_put_blocking(pio,0,1);
+    pio_sm_put_blocking(pio,sm_cmd,1);
     sleep_us(15);
+    pio_sm_set_consecutive_pindirs(pio_dma, sm_dma, 8, 8,false);
     gpio_put(ACSI_D_DIR,1);
-    pio_sm_set_consecutive_pindirs(pio_dma, 0, 8, 8,false);
+   
     //acsi_dma_out_disable(pio_dma,0);
     for (int i=0;i<6;i++) {
         printf("0x%02x, ",data[i]);
     }
+   
+//    acsi_dma_out_program_init(pio_dma,sm_dma, offset_dma,ACSI_DRQ);
+//    wait_cmd_program_init(pio, sm_cmd, offset_cmd, ACSI_IRQ);
+
+
         /*if(!gpio_get(ACSI_A1)) {
            if (!gpio_get(ACSI_CS)) {
               d = 0;  
