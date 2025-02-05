@@ -69,7 +69,7 @@
 bool dummy_bootsector = true;
 // Inquery
 unsigned char _fuji_inquery[32] = {'F','u','j','i','N','e','t',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',
-                                   'F','u','j','i','D','e','v','i','c','e',' ',' ',' ',' ',' ',' ',' '};
+                                   'F','u','j','i','D','e','v','i','c','e',' ',' ',' ',' ',' '};
 // ACSI Error Codes
 
 #define ERROR_OK 0x00
@@ -259,7 +259,7 @@ int acsi_write_status(uint status) {
     return 0;    
 }
 void acsi_send_request_sense(uint error) {
-    uint8_t block[16] = 0;
+    uint8_t block[16] = { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
     block[0] = error;
     //Send answer 16 bytes (sems more sensible than 4 bytes)
        gpio_put(ACSI_D_DIR,ACSI_BUS_OUTPUT);  /* HIGH = INPUT */
@@ -414,4 +414,5 @@ int main() {
             acsi_error = ERROR_INVALID_COMMAND;
     }
     return 0;
+}
 }
