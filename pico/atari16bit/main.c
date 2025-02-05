@@ -30,16 +30,69 @@
 #include "bootsector.h"
 
 #define LED_PIN 25
+/* UART pins connected to ESP32 */
+#define ESP32_UART_TX 4
+#define ESP32_UART_RX 5
 
-// ACSI ID- id to repond to
+/**
+ * ACSI stuff
+ */
+
+//ACSI Bus Direction (for use with ACSI_D_DIR pin)
+#define ACSI_BUS_INPUT 1
+#define ACSI_BUS_OUTPUT 0
+
+/* ACSI Commands*/
+#define CMD_TEST_UNIT_READY 0x00
+#define CMD_REQUEST_SENSE 0x03
+#define CMD_READ 0x08
+#define CMD_WRITE 0x0a
+#define CMD_SEEK 0x0b
+#define CMD_INQUERY 0x12
+#define CMD_MODE_SENSE 0x1a
+
+/* ICD extension */
+#define CMD_ICD_EXT 0x1f
+
+/* Atari Page Interface */
+
+#define CMD_PRINT 0x0a //Same as Write (Printer need own ID)
+#define CMD_MODE_SELECT 0x15
+#define CMD_STOP_PRINT 0x1b
+
+// ACSI IDs- ids to repond to
 
 #define ACSI_ID 2
+#define PRINTER_ID 5 /* Standard id for printer */
+
+// Bootsector enabled
+bool dummy_bootsector = true;
+// Inquery
+unsigned char _fuji_inquery[32] = {'F','u','j','i','N','e','t',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',
+                                   'F','u','j','i','D','e','v','i','c','e',' ',' ',' ',' ',' ',' ',' '};
+// ACSI Error Codes
+
+#define ERROR_OK 0x00
+#define ERROR_NO_INDEX 0x01
+#define CHECK_CONDITION 0x02
+#define ERROR_WRITE_FAULT 0x03
+#define ERROR_DRIVE_NOT_READY 0x04
+#define ERROR_NO_TRACK_00 0x06
+#define ERROR_INVALID_COMMAND 0x20
+#define ERROR_INVALID_ADDRESS 0x21
+#define ERROR_VOLUME_OVERFLOW 0x23
+#define ERROR_INVALID_ARGUMENT 0x24
+#define ERROR_INVALID_DEVICE_NUMBER 0x25
 
 // PIO instances global
 
 PIO pio = pio0;
 PIO pio_dma = pio1;
 PIO pio_snd_status =pio1;
+uint sm_snd_status = 1;
+uint sm_dma = 1;
+uint sm_cmd=0;
+ 
 /**
  * ACSI is handled by core1
  */
@@ -155,6 +208,26 @@ void acsi_dma_out_disable(PIO pio,uint sm) {
     }
 }
 
+void acsi_send_inquery() {
+
+    gpio_put(ACSI_D_DIR,ACSI_BUS_OUTPUT);  /* HIGH = INPUT */
+    pio_sm_set_consecutive_pindirs(pio_dma,0,ACSI_D0,8,true);
+    //Send inquery over bus
+    for (int i=0;i<32;i++) {
+        pio_sm_put_blocking(pio_dma, 0,_fuji_inquery[i]);
+    }
+    sleep_us(12); // wait for dma to finnish
+
+    //Send status byte
+    pio_sm_put_blocking(pio_snd_status,sm_snd_status,ERROR_OK);
+    pio_sm_put_blocking(pio, sm_cmd,1); //send IRQ
+    sleep_us(15); //Wait a bit
+    // Return bus to input
+    gpio_put(ACSI_D_DIR,ACSI_BUS_INPUT);
+    pio_sm_set_consecutive_pindirs(pio_dma, 0, ACSI_D0, 8,false);
+
+}
+
 void PIO_IRQ_handler() {
 
     if (pio_interrupt_get(pio,0)) {
@@ -171,15 +244,69 @@ void PIO_IRQ_handler() {
     pio_interrupt_clear(pio,0);
     }
 }
+uint get_device_number(uint d) {
+    return d >> 5;
+}
+uint get_block_address(uint dh,uint dm,uint dl) {
+    uint a=0;
+    a = ((dh & 0x1f) << 16 ) | (dm << 8) | dl;
+    return a; 
+}
+int acsi_write_status(uint status) {
+    //TODO: 1-3 second timeout
+    pio_sm_put_blocking(pio_snd_status,sm_snd_status,status);
+    pio_sm_put_blocking(pio, sm_cmd,1); //send IRQ 
+    return 0;    
+}
+void acsi_send_request_sense(uint error) {
+    uint8_t block[16] = 0;
+    block[0] = error;
+    //Send answer 16 bytes (sems more sensible than 4 bytes)
+       gpio_put(ACSI_D_DIR,ACSI_BUS_OUTPUT);  /* HIGH = INPUT */
+    pio_sm_set_consecutive_pindirs(pio_dma,0,ACSI_D0,8,true);
+    //Send bootsector over bus
+    for (int i=0;i<512;i++) {
+        pio_sm_put_blocking(pio_dma, 0,_fuji2bootsector[i]);
+    }
+    sleep_us(12); // wait for dma to finnish
 
+    //Send status byte
+    pio_sm_put_blocking(pio_snd_status,sm_snd_status,ERROR_OK);
+    pio_sm_put_blocking(pio, sm_cmd,1); //send IRQ
+    sleep_us(15); //Wait a bit
+    // Return bus to input
+    gpio_put(ACSI_D_DIR,ACSI_BUS_INPUT);
+    pio_sm_set_consecutive_pindirs(pio_dma, 0, ACSI_D0, 8,false);
+}
+int send_dummy_bootsector() {
+    
+    //Set bus to output
+    gpio_put(ACSI_D_DIR,ACSI_BUS_OUTPUT);  /* HIGH = INPUT */
+    pio_sm_set_consecutive_pindirs(pio_dma,0,ACSI_D0,8,true);
+    //Send bootsector over bus
+    for (int i=0;i<512;i++) {
+        pio_sm_put_blocking(pio_dma, 0,_fuji2bootsector[i]);
+    }
+    sleep_us(12); // wait for dma to finnish
+
+    //Send status byte
+    pio_sm_put_blocking(pio_snd_status,sm_snd_status,ERROR_OK);
+    pio_sm_put_blocking(pio, sm_cmd,1); //send IRQ
+    sleep_us(15); //Wait a bit
+    // Return bus to input
+    gpio_put(ACSI_D_DIR,ACSI_BUS_INPUT);
+    pio_sm_set_consecutive_pindirs(pio_dma, 0, ACSI_D0, 8,false);
+
+    return 0;
+}
 
 int main() {
     int i;
-    uint8_t d,id,cmd;
+    uint8_t d,id;
     uint8_t cdb[6];
     stdio_init_all();
     //sleep_ms(8000);
-    printf("Pico ACSI controller\n\n");
+    printf("\n\nPico ACSI controller\n\n");
     printf("Init GPIOs...\n\n");
     
     setup_acsi_gpio();
@@ -197,15 +324,12 @@ int main() {
     multicore_launch_core1(core1_entry);*/
     printf("Setting up PIO.\n");
     
-    uint sm_snd_status = 1;
     uint offset_snd_status = pio_add_program(pio_snd_status, &send_status_program);
     send_status_program_init(pio_snd_status, sm_snd_status, offset_snd_status, ACSI_IRQ);
     //Setup ACSI cmd program on pio0
-    uint sm_dma = 1;
     uint offset_dma = pio_add_program(pio_dma,&acsi_dma_out_program);
     acsi_dma_out_program_init(pio_dma,sm_dma, offset_dma,ACSI_DRQ);
 
-    uint sm_cmd=0;
     uint offset_cmd = pio_add_program(pio, &wait_cmd_program);
     wait_cmd_program_init(pio, sm_cmd, offset_cmd, ACSI_IRQ);
 
@@ -221,71 +345,73 @@ int main() {
 
     printf("PIO setup done.\n");
     uint8_t data[6*8];
-    uint8_t ad,aid,acmd;
+    uint8_t ad,aid,acmd,bytes_to_fetch;
+    uint cmdbytes = 6;
+    bool unit_ready = true; // Unit is always ready (for now) 
+    uint acsi_error = ERROR_OK;
     while(1) {
     wait_cmd:
-
     ad = (uint8_t)pio_sm_get_blocking(pio,0);
     acmd = ad & 0x1f;
     aid = ad >> 5;
+    bytes_to_fetch = 5;
     if (aid == ACSI_ID) {
-        pio_sm_put(pio,0,4); // Five more bytes to read
+        if (acmd == CMD_ICD_EXT) {
+            // ICD extentions
+            bytes_to_fetch = 10;
+            cmdbytes = 12;
+        } 
+        pio_sm_put(pio,0,bytes_to_fetch-1); // Send bytes to read to PIO (-1 as 0 counts)
         data[0]=ad;
     }
     else {
-        pio_sm_put(pio,0,0); // Ignore command
+        pio_sm_put(pio,0,0); // Ignore command (fetch 0 bytes)
         goto wait_cmd;
     }
     // Read aditional bytes
-
-    for (int i=1;i<6;i++) { 
+    // TODO: add 3s timeout
+    for (int i=1; i < cmdbytes; i++) { 
         data[i]= (uint8_t)pio_sm_get_blocking(pio,0);
     }
-    //Setup dma and send 16 bytes
-    gpio_put(ACSI_D_DIR,0);  /* HIGH = INPUT */
-    pio_sm_set_consecutive_pindirs(pio_dma,sm_dma,8,8,true);
-    //acsi_dma_out_enable(pio_dma,0);
-    for (int i=0;i<512;i++) {
-        pio_sm_put_blocking(pio_dma, sm_dma,(_fuji2bootsector[i]));
-    }
-    sleep_us(12); // wait for dma to finnish
-
-    //pio_gpio_init(pio_snd_status,ACSI_IRQ);
-    pio_sm_put_blocking(pio_snd_status,sm_snd_status,0); //status ok
-    //sleep_us(10);
-    pio_sm_put_blocking(pio,sm_cmd,1);
-    sleep_us(15);
-    pio_sm_set_consecutive_pindirs(pio_dma, sm_dma, 8, 8,false);
-    gpio_put(ACSI_D_DIR,1);
-   
-    //acsi_dma_out_disable(pio_dma,0);
-    for (int i=0;i<6;i++) {
-        printf("0x%02x, ",data[i]);
-    }
-   
-//    acsi_dma_out_program_init(pio_dma,sm_dma, offset_dma,ACSI_DRQ);
-//    wait_cmd_program_init(pio, sm_cmd, offset_cmd, ACSI_IRQ);
-
-
-        /*if(!gpio_get(ACSI_A1)) {
-           if (!gpio_get(ACSI_CS)) {
-              d = 0;  
-              for (i=0;i<7;i++) {
-                d = d + (gpio_get(i+8) << i);
-              }  
-              id = d >> 5;
-              cmd = d && 0x1f;
-              cdb[0]=d;
-              if (id == 0) {
-                gpio_put(ACSI_IRQ,0);
-                sleep_us(2);
-                gpio_put(ACSI_IRQ,1);
-
-                // Get rest of the 5 cdb bytes 
-              }
-           }
+    switch (acmd) {
+        case CMD_TEST_UNIT_READY:
+            if (unit_ready) {
+                acsi_write_status(ERROR_OK);
+            }
+            else {
+                acsi_write_status(CHECK_CONDITION);
+                acsi_error = ERROR_DRIVE_NOT_READY;
+            }
             
-        }*/
+            break;
+        
+        case CMD_READ:
+            // Get device number (6 Floppy A 7 Floppy B)
+            if (get_device_number(data[1]) == 0) {
+                int block = get_block_address(data[1],data[2],data[3]);
+                if (block == 0 && dummy_bootsector && data[4] == 1) {
+                    send_dummy_bootsector();
+                }
+            }
+            break;
+        case CMD_WRITE:
+            break;
+        case CMD_SEEK:
+            acsi_write_status(ERROR_OK); //No need to seek (in modern times)
+            break;
+        case CMD_REQUEST_SENSE:
+            acsi_send_request_sense(acsi_error);
+            break;
+        case CMD_MODE_SENSE:
+            break;
+        case CMD_MODE_SELECT:
+            break;
+        case CMD_INQUERY:
+            acsi_send_inquery();
+            break;
+        default:
+            /* Command not implemented */
+            acsi_error = ERROR_INVALID_COMMAND;
     }
     return 0;
 }
