@@ -46,7 +46,7 @@ send_irq:
 // PIO Freq 50 MHz (20ns per clock cycle)
 #define PIO_HZ 50000000
 
-static inline send_status_program_init(PIO pio, uint sm, uint offset, uint pin) {
+static inline int send_status_program_init(PIO pio, uint sm, uint offset, uint pin) {
   // 1. Define a config object
   pio_sm_config config = wait_cmd_program_get_default_config(offset);
 
@@ -61,7 +61,7 @@ static inline send_status_program_init(PIO pio, uint sm, uint offset, uint pin) 
   sm_config_set_out_shift(&config, true,true,8);
   
   float div = (float)clock_get_hz(clk_sys) / PIO_HZ;
-  printf("PIO div is: %2.2f\n",div);
+  printf("Send Status PIO div is: %2.2f\n",div);
   sm_config_set_clkdiv(&config, div);
   
   // 3. Apply the configuration & activate the State Machine
