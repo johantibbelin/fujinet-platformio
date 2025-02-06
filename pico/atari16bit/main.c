@@ -31,15 +31,70 @@
 
 #define LED_PIN 25
 
-// ACSI ID- id to repond to
+/* UART pins connected to ESP32 */
+#define ESP32_UART_TX 4
+#define ESP32_UART_RX 5
+
+/* DEBUG ACSI*/
+#define DEBUG_ACSI 1
+
+/**
+ * ACSI stuff
+ */
+
+//ACSI Bus Direction (for use with ACSI_D_DIR pin)
+#define ACSI_BUS_INPUT 1
+#define ACSI_BUS_OUTPUT 0
+
+/* ACSI Commands*/
+#define CMD_TEST_UNIT_READY 0x00
+#define CMD_REQUEST_SENSE 0x03
+#define CMD_READ 0x08
+#define CMD_WRITE 0x0a
+#define CMD_SEEK 0x0b
+#define CMD_INQUERY 0x12
+#define CMD_MODE_SENSE 0x1a
+
+/* ICD extension */
+#define CMD_ICD_EXT 0x1f
+
+/* Atari Page Interface */
+
+#define CMD_PRINT 0x0a //Same as Write (Printer need own ID)
+#define CMD_MODE_SELECT 0x15
+#define CMD_STOP_PRINT 0x1b
+
+// ACSI IDs- ids to repond to
 
 #define ACSI_ID 2
+#define PRINTER_ID 5 /* Standard id for printer */
 
-// PIO instances global
+// Bootsector enabled
+bool dummy_bootsector = true;
+// Unit ready
+bool unit_ready = true; //Unit is aways ready (for now)
+// ACSI Error Codes
+
+#define ERROR_OK 0x00
+#define CHECK_CONDITION 0x02
+#define ERROR_DRIVE_NOT_READY 0x04
+#define ERROR_INVALID_COMMAND 0x20
+#define ERROR_INVALID_ADDRESS 0x21
+#define ERROR_VOLUME_OVERFLOW 0x23
+#define ERROR_INVALID_ARGUMENT 0x24
+#define ERROR_INVALID_DEVICE_NUMBER 0x25
+
+// PIO instances and sm numbers global
 
 PIO pio = pio0;
 PIO pio_dma = pio1;
 PIO pio_snd_status =pio1;
+
+uint sm_snd_status = 1;
+uint sm_dma = 1;
+uint sm_cmd=0;
+
+
 /**
  * ACSI is handled by core1
  */
@@ -173,6 +228,44 @@ void PIO_IRQ_handler() {
 }
 
 
+uint8_t acsi_send_status(uint8_t status) {
+     //pio_gpio_init(pio_snd_status,ACSI_IRQ);
+    pio_sm_put_blocking(pio_snd_status,sm_snd_status,status); //send status
+    //sleep_us(10);
+    pio_sm_put_blocking(pio,sm_cmd,1);
+    sleep_us(15);
+    pio_sm_set_consecutive_pindirs(pio_dma, sm_dma, 8, 8,false);
+    gpio_put(ACSI_D_DIR,1);
+
+    return ERROR_OK;
+}
+/**
+ * @brief ACSI read command (send data with dma)
+ * @return ACSI error
+ */
+uint8_t acsi_read(uint8_t device,uint block_nr,uint8_t num_blocks,uint8_t control_byte) {
+
+    //Change bus direction
+    gpio_put(ACSI_D_DIR,0);  /* HIGH = INPUT */
+    pio_sm_set_consecutive_pindirs(pio_dma,sm_dma,8,8,true);
+
+    for (int i=0;i<512;i++) {
+        pio_sm_put_blocking(pio_dma, sm_dma,(_fuji2bootsector[i]));
+    }
+    sleep_us(12); // wait for dma to finnish
+
+    //pio_gpio_init(pio_snd_status,ACSI_IRQ);
+    pio_sm_put_blocking(pio_snd_status,sm_snd_status,0); //status ok
+    //sleep_us(10);
+    pio_sm_put_blocking(pio,sm_cmd,1);
+    sleep_us(15);
+    pio_sm_set_consecutive_pindirs(pio_dma, sm_dma, 8, 8,false);
+    gpio_put(ACSI_D_DIR,1);
+
+    return ERROR_OK;
+}
+
+
 int main() {
     int i;
     uint8_t d,id,cmd;
@@ -197,18 +290,16 @@ int main() {
     multicore_launch_core1(core1_entry);*/
     printf("Setting up PIO.\n");
     
-    uint sm_snd_status = 1;
     uint offset_snd_status = pio_add_program(pio_snd_status, &send_status_program);
     send_status_program_init(pio_snd_status, sm_snd_status, offset_snd_status, ACSI_IRQ);
     //Setup ACSI cmd program on pio0
-    uint sm_dma = 1;
     uint offset_dma = pio_add_program(pio_dma,&acsi_dma_out_program);
     acsi_dma_out_program_init(pio_dma,sm_dma, offset_dma,ACSI_DRQ);
 
-    uint sm_cmd=0;
-    uint offset_cmd = pio_add_program(pio, &wait_cmd_program);
+     uint offset_cmd = pio_add_program(pio, &wait_cmd_program);
     wait_cmd_program_init(pio, sm_cmd, offset_cmd, ACSI_IRQ);
 
+    uint8_t acsi_error = ERROR_OK;
     /* Setup interrupt and handler */
     //pio_set_irq0_source_enabled(pio, pis_interrupt0, true); // sets IRQ0
     
@@ -221,7 +312,8 @@ int main() {
 
     printf("PIO setup done.\n");
     uint8_t data[6*8];
-    uint8_t ad,aid,acmd;
+    uint8_t ad,aid,acmd,device, num_blocks,control_byte;
+    uint block_nr = 0;
     while(1) {
     wait_cmd:
 
@@ -241,8 +333,34 @@ int main() {
     for (int i=1;i<6;i++) { 
         data[i]= (uint8_t)pio_sm_get_blocking(pio,0);
     }
+    block_nr = ((data[1] & 0x1f) << 16) | (data[2] << 8) | data[3];
+    device = data[1] >> 5;
+    num_blocks = data[4];
+    control_byte = data[5];
+    if (DEBUG_ACSI) {
+        printf("\nid: %x \nblock nr: $%x \n device: $%x \n num_blocks: $%x\n",aid, block_nr, device, num_blocks);
+    }
+
+    switch (acmd) {
+        case CMD_TEST_UNIT_READY:
+            if (unit_ready) {
+                acsi_send_status(ERROR_OK);
+
+            }
+            else {
+                acsi_send_status(CHECK_CONDITION);
+                acsi_error = ERROR_DRIVE_NOT_READY;
+            }
+            break;
+        case CMD_READ:
+            acsi_read(device,block_nr,num_blocks,control_byte);
+            break;
+        default:
+
+    }
+    
     //Setup dma and send 16 bytes
-    gpio_put(ACSI_D_DIR,0);  /* HIGH = INPUT */
+    /*gpio_put(ACSI_D_DIR,0);  // HIGH = INPUT 
     pio_sm_set_consecutive_pindirs(pio_dma,sm_dma,8,8,true);
     //acsi_dma_out_enable(pio_dma,0);
     for (int i=0;i<512;i++) {
@@ -257,7 +375,7 @@ int main() {
     sleep_us(15);
     pio_sm_set_consecutive_pindirs(pio_dma, sm_dma, 8, 8,false);
     gpio_put(ACSI_D_DIR,1);
-   
+    */
     //acsi_dma_out_disable(pio_dma,0);
     for (int i=0;i<6;i++) {
         printf("0x%02x, ",data[i]);
