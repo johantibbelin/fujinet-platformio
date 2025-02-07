@@ -72,7 +72,7 @@
 // Bootsector enabled
 bool dummy_bootsector = true;
 // Unit ready
-bool unit_ready = true; //Unit is aways ready (for now)
+bool unit_ready = false; //Unit is aways ready (for now)
 // ACSI Error Codes
 
 #define ERROR_OK 0x00
@@ -230,6 +230,9 @@ void PIO_IRQ_handler() {
 
 uint8_t acsi_send_status(uint8_t status) {
      //pio_gpio_init(pio_snd_status,ACSI_IRQ);
+    gpio_put(ACSI_D_DIR,0);
+    pio_sm_set_consecutive_pindirs(pio_dma, sm_dma, 8, 8, true);
+    
     pio_sm_put_blocking(pio_snd_status,sm_snd_status,status); //send status
     //sleep_us(10);
     pio_sm_put_blocking(pio,sm_cmd,1);
@@ -262,6 +265,55 @@ uint8_t acsi_read(uint8_t device,uint block_nr,uint8_t num_blocks,uint8_t contro
     pio_sm_set_consecutive_pindirs(pio_dma, sm_dma, 8, 8,false);
     gpio_put(ACSI_D_DIR,1);
 
+    return ERROR_OK;
+}
+
+uint8_t acsi_request_sense(uint8_t device,uint block_nr, uint8_t num_blocks,uint8_t control_byte, uint8_t err) {
+    //Change bus direction
+    gpio_put(ACSI_D_DIR,0);  /* HIGH = INPUT */
+    pio_sm_set_consecutive_pindirs(pio_dma,sm_dma,8,8,true);
+    // Send error code
+    pio_sm_put_blocking(pio_dma, sm_dma, err);
+    // Send additional 15 bytes.
+    for (int i=1;i<16;i++) {
+        pio_sm_put_blocking(pio_dma, sm_dma, 0x00);
+    }
+    sleep_us(12); // wait for dma to finnish
+
+    //pio_gpio_init(pio_snd_status,ACSI_IRQ);
+    pio_sm_put_blocking(pio_snd_status,sm_snd_status,0); //status ok
+    //sleep_us(10);
+    pio_sm_put_blocking(pio,sm_cmd,1);
+    sleep_us(15);
+    pio_sm_set_consecutive_pindirs(pio_dma, sm_dma, 8, 8,false);
+    gpio_put(ACSI_D_DIR,1);
+
+    return ERROR_OK;
+}
+
+
+uint8_t acsi_send_inquery() {
+//Inquery data see SCSI specification for details
+    unsigned char inquery[32] = {0x00, 0x80, 0x00,0x00,0x00,0x00,0x00,0x00,
+                                 'F','u','j','i','N','e','t',' ',
+                                 'F','u','j','i','D','i','s','k',
+                                 ' ',' ',' ',' ',' ',' ',' ',' '};
+    //Change bus direction to output
+    gpio_put(ACSI_D_DIR,0);  /* HIGH = INPUT */
+    pio_sm_set_consecutive_pindirs(pio_dma,sm_dma,8,8,true);
+    // Send Inquery 32 bytes.
+    for (int i=0;i<32;i++) {
+        pio_sm_put_blocking(pio_dma, sm_dma, inquery[i]);
+    }
+    sleep_us(12); // wait for dma to finnish
+
+    //pio_gpio_init(pio_snd_status,ACSI_IRQ);
+    pio_sm_put_blocking(pio_snd_status,sm_snd_status,0); //status ok
+    //sleep_us(10);
+    pio_sm_put_blocking(pio,sm_cmd,1); //send IRQ
+    sleep_us(15);
+    pio_sm_set_consecutive_pindirs(pio_dma, sm_dma, 8, 8,false);
+    gpio_put(ACSI_D_DIR,1);
     return ERROR_OK;
 }
 
@@ -338,7 +390,7 @@ int main() {
     num_blocks = data[4];
     control_byte = data[5];
     if (DEBUG_ACSI) {
-        printf("\nid: %x \nblock nr: $%x \n device: $%x \n num_blocks: $%x\n",aid, block_nr, device, num_blocks);
+        printf("\nid: 0x%x \nblock nr: 0x%x \n device: 0x%x \n num_blocks: 0x%x\n",aid, block_nr, device, num_blocks);
     }
 
     switch (acmd) {
@@ -355,8 +407,15 @@ int main() {
         case CMD_READ:
             acsi_read(device,block_nr,num_blocks,control_byte);
             break;
+        case CMD_REQUEST_SENSE:
+            acsi_request_sense(device,block_nr,num_blocks,control_byte, acsi_error);
+            break;
+        case CMD_INQUERY:
+            acsi_send_inquery();
+            break;
         default:
-
+            acsi_error = ERROR_INVALID_COMMAND;
+            acsi_send_status(CHECK_CONDITION);
     }
     
     //Setup dma and send 16 bytes
