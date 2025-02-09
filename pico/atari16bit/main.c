@@ -36,7 +36,29 @@
 #define ESP32_UART_RX 5
 
 /* DEBUG ACSI*/
-#define DEBUG_ACSI 1
+#undef DEBUG_ACSI
+//#undef DEBUG_ACSI
+#define CMDQ_SIZE 20
+
+#ifdef DEBUG_ACSI
+
+struct dacsi_struct {
+    uint8_t byte0;
+    uint8_t byte1;
+    uint8_t byte2;
+    uint8_t byte3;
+    uint8_t byte4;
+    uint8_t byte5;
+};
+
+typedef struct dacsi_struct dacsicmd;
+dacsicmd cmdq[CMDQ_SIZE];
+
+uint8_t dacsi_q_start = 0;
+uint8_t dacsi_q_end = 0;
+uint8_t dasci_q_size = 0;
+
+#endif /* DEBUG_ACSI */
 
 /**
  * ACSI stuff
@@ -72,7 +94,7 @@
 // Bootsector enabled
 bool dummy_bootsector = true;
 // Unit ready
-bool unit_ready = false; //Unit is aways ready (for now)
+bool unit_ready = true; //Unit is aways ready (for now)
 // ACSI Error Codes
 
 #define ERROR_OK 0x00
@@ -96,22 +118,30 @@ uint sm_cmd=0;
 
 
 /**
- * ACSI is handled by core1
+ * Debug is handled by core1
  */
 void core1_entry() {
     //Core one code goes here
     sleep_ms(5000);
     printf("\nCore 1 Started.\n");
-    // Setup PIO
-    printf("Setting up PIO.\n");
-    PIO pio = pio0;
-    uint sm = 0;
-    uint offset = pio_add_program(pio, &wait_cmd_program);
-    wait_cmd_program_init(pio, sm, offset, 6);
-    printf("PIO setup done.\n");
+
     while (1) {
 
-
+#ifdef DEBUG_ACSI
+        while (dasci_q_size == 0) {
+        }
+        while (dasci_q_size > 0) {
+            printf("ACSI cmd: %x, %x, %x, %x, %x, %x",cmdq[dacsi_q_start].byte0, cmdq[dacsi_q_start].byte1, 
+                                                      cmdq[dacsi_q_start].byte2, cmdq[dacsi_q_start].byte3, 
+                                                      cmdq[dacsi_q_start].byte4, cmdq[dacsi_q_start].byte5);
+            dasci_q_size--;
+            if (dacsi_q_start == CMDQ_SIZE - 1) {
+                dacsi_q_start == 0;
+            }
+            dacsi_q_start++;
+        }
+    
+#endif /* DEBUG_ACSI */
     }
 }
 
@@ -275,10 +305,10 @@ uint8_t acsi_request_sense(uint8_t device,uint block_nr, uint8_t num_blocks,uint
     // Send error code
     pio_sm_put_blocking(pio_dma, sm_dma, err);
     // Send additional 15 bytes.
-    for (int i=1;i<16;i++) {
+    /*for (int i=1;i<4;i++) {
         pio_sm_put_blocking(pio_dma, sm_dma, 0x00);
-    }
-    sleep_us(12); // wait for dma to finnish
+    }*/
+    //sleep_us(12); // wait for dma to finnish
 
     //pio_gpio_init(pio_snd_status,ACSI_IRQ);
     pio_sm_put_blocking(pio_snd_status,sm_snd_status,0); //status ok
@@ -294,24 +324,27 @@ uint8_t acsi_request_sense(uint8_t device,uint block_nr, uint8_t num_blocks,uint
 
 uint8_t acsi_send_inquery() {
 //Inquery data see SCSI specification for details
-    unsigned char inquery[32] = {0x00, 0x80, 0x00,0x00,0x00,0x00,0x00,0x00,
+    unsigned char inquery[48] = {0x00, 0x80, 0x00,0x00,0x00,0x00,0x00,0x00,
                                  'F','u','j','i','N','e','t',' ',
                                  'F','u','j','i','D','i','s','k',
+                                 ' ',' ',' ',' ',' ',' ',' ',' ',
+                                 ' ',' ',' ',' ',' ',' ',' ',' ',
                                  ' ',' ',' ',' ',' ',' ',' ',' '};
     //Change bus direction to output
     gpio_put(ACSI_D_DIR,0);  /* HIGH = INPUT */
     pio_sm_set_consecutive_pindirs(pio_dma,sm_dma,8,8,true);
     // Send Inquery 32 bytes.
-    for (int i=0;i<32;i++) {
-        pio_sm_put_blocking(pio_dma, sm_dma, inquery[i]);
-    }
-    sleep_us(12); // wait for dma to finnish
+    //pio_sm_put_blocking(pio,sm_cmd,1); //send IRQ
+    /*for (int i=0;i<48;i++) {
+         pio_sm_put_blocking(pio_dma, sm_dma, inquery[i]);
+    }*/
+    //sleep_us(12); // wait for dma to finnish
 
     //pio_gpio_init(pio_snd_status,ACSI_IRQ);
     pio_sm_put_blocking(pio_snd_status,sm_snd_status,0); //status ok
     //sleep_us(10);
     pio_sm_put_blocking(pio,sm_cmd,1); //send IRQ
-    sleep_us(15);
+    sleep_us(4);
     pio_sm_set_consecutive_pindirs(pio_dma, sm_dma, 8, 8,false);
     gpio_put(ACSI_D_DIR,1);
     return ERROR_OK;
@@ -338,8 +371,11 @@ int main() {
     gpio_put(LED_PIN,0);
     sleep_ms(4000);
     
-    /*printf("Starting Core1 (ACSI handling.)\n \n");
-    multicore_launch_core1(core1_entry);*/
+    #ifdef DEBUG_ACSI
+    printf("Starting Core1 (ACSI handling.)\n \n");
+    multicore_launch_core1(core1_entry);
+    #endif
+    
     printf("Setting up PIO.\n");
     
     uint offset_snd_status = pio_add_program(pio_snd_status, &send_status_program);
@@ -389,9 +425,9 @@ int main() {
     device = data[1] >> 5;
     num_blocks = data[4];
     control_byte = data[5];
-    if (DEBUG_ACSI) {
-        printf("\nid: 0x%x \nblock nr: 0x%x \n device: 0x%x \n num_blocks: 0x%x\n",aid, block_nr, device, num_blocks);
-    }
+    #ifdef DEBUG_ACSI
+        printf("\nid: 0x%x Cmd:%x \nblock nr: 0x%x device: 0x%x \n num_blocks: 0x%x\n",aid, acmd, block_nr, device, num_blocks);
+    #endif
 
     switch (acmd) {
         case CMD_TEST_UNIT_READY:
@@ -436,9 +472,9 @@ int main() {
     gpio_put(ACSI_D_DIR,1);
     */
     //acsi_dma_out_disable(pio_dma,0);
-    for (int i=0;i<6;i++) {
+    /*for (int i=0;i<6;i++) {
         printf("0x%02x, ",data[i]);
-    }
+    }*/
    
 //    acsi_dma_out_program_init(pio_dma,sm_dma, offset_dma,ACSI_DRQ);
 //    wait_cmd_program_init(pio, sm_cmd, offset_cmd, ACSI_IRQ);
