@@ -305,9 +305,9 @@ uint8_t acsi_request_sense(uint8_t device,uint block_nr, uint8_t num_blocks,uint
     // Send error code
     pio_sm_put_blocking(pio_dma, sm_dma, err);
     // Send additional 15 bytes.
-    /*for (int i=1;i<4;i++) {
+    for (int i=1;i<4;i++) {
         pio_sm_put_blocking(pio_dma, sm_dma, 0x00);
-    }*/
+    }
     //sleep_us(12); // wait for dma to finnish
 
     //pio_gpio_init(pio_snd_status,ACSI_IRQ);
@@ -333,18 +333,18 @@ uint8_t acsi_send_inquery() {
     //Change bus direction to output
     gpio_put(ACSI_D_DIR,0);  /* HIGH = INPUT */
     pio_sm_set_consecutive_pindirs(pio_dma,sm_dma,8,8,true);
-    // Send Inquery 32 bytes.
+    // Send Inquery 48 bytes.
     //pio_sm_put_blocking(pio,sm_cmd,1); //send IRQ
-    /*for (int i=0;i<48;i++) {
+    for (int i=0;i<48;i++) {
          pio_sm_put_blocking(pio_dma, sm_dma, inquery[i]);
-    }*/
-    //sleep_us(12); // wait for dma to finnish
+    }
+    sleep_us(12); // wait for dma to finnish
 
     //pio_gpio_init(pio_snd_status,ACSI_IRQ);
     pio_sm_put_blocking(pio_snd_status,sm_snd_status,0); //status ok
     //sleep_us(10);
     pio_sm_put_blocking(pio,sm_cmd,1); //send IRQ
-    sleep_us(4);
+    sleep_us(2);
     pio_sm_set_consecutive_pindirs(pio_dma, sm_dma, 8, 8,false);
     gpio_put(ACSI_D_DIR,1);
     return ERROR_OK;
@@ -472,9 +472,9 @@ int main() {
     gpio_put(ACSI_D_DIR,1);
     */
     //acsi_dma_out_disable(pio_dma,0);
-    /*for (int i=0;i<6;i++) {
+    for (int i=0;i<6;i++) {
         printf("0x%02x, ",data[i]);
-    }*/
+    }
    
 //    acsi_dma_out_program_init(pio_dma,sm_dma, offset_dma,ACSI_DRQ);
 //    wait_cmd_program_init(pio, sm_cmd, offset_cmd, ACSI_IRQ);

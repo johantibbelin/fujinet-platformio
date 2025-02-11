@@ -36,8 +36,10 @@ send_irq:
     nop [15] side 0
     nop [15] side 0
     nop [15] side 0
+    nop [15] side 0
+    ;nop [15] side 0
     set pins,0 side 0 ;set IRQ to low
-    set y,7 side 0
+    set y,6 side 0
     ;wait loop
 w8:
     nop side 0 [15]
