@@ -31,15 +31,15 @@ start:
     pull side 0
     mov x,osr side 1
     jmp !x,start side 0
+    set y,8 side 0
 send_irq:
     nop [15] side 0
     nop [15] side 0
     nop [15] side 0
     nop [15] side 0
-    nop [15] side 0
-    ;nop [15] side 0
+    jmp y--,send_irq side 0
     set pins,0 side 0 ;set IRQ to low
-    set y,6 side 0
+    set y,10 side 0
     ;wait loop
 w8:
     nop side 0 [15]
@@ -51,9 +51,11 @@ w8:
     ;nop side 0 [15]
     set pins,1 side 0
 
+    wait 1 gpio A1 side 0 ; ensure byte 1-n
     wait 0 gpio CS side 1
     wait 1 gpio CS side 0
     in pins,8 side 0
+    set y,12 side 0
     jmp x--,send_irq side 0
     pull side 0
     set pins,0 side 0

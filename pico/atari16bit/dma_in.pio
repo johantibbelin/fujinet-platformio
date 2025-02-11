@@ -33,7 +33,7 @@ start:
     
 %c-sdk {
 
-static inline void acsi_dma_in_program_init(PIO pio, uint sm, uint offset, uint pin, uint nr_pins) {
+static inline void acsi_dma_in_program_init(PIO pio, uint sm, uint offset, uint pin) {
   // 1. Define a config object
   pio_sm_config config = acsi_dma_in_program_get_default_config(offset);
 
