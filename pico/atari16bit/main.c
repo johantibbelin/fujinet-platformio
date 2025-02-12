@@ -122,7 +122,7 @@ PIO pio_snd_status =pio1;
 PIO pio_dma_in = pio1;
 
 uint sm_dma_in = 3;
-uint sm_snd_status = 2;
+uint sm_snd_status = 1;
 uint sm_dma = 1;
 uint sm_cmd=0;
 
