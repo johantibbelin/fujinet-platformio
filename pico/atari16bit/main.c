@@ -35,6 +35,14 @@
 #define ESP32_UART_TX 4
 #define ESP32_UART_RX 5
 
+/**
+ * DEBUG stuff
+ */
+
+static volatile uint8_t cmdarray[2048];
+static volatile int cmdi=0,cmdp=0;
+
+
 /* DEBUG ACSI*/
 #undef DEBUG_ACSI
 //#undef DEBUG_ACSI
@@ -111,8 +119,10 @@ bool unit_ready = true; //Unit is aways ready (for now)
 PIO pio = pio0;
 PIO pio_dma = pio1;
 PIO pio_snd_status =pio1;
+PIO pio_dma_in = pio1;
 
-uint sm_snd_status = 1;
+uint sm_dma_in = 3;
+uint sm_snd_status = 2;
 uint sm_dma = 1;
 uint sm_cmd=0;
 
@@ -124,9 +134,14 @@ void core1_entry() {
     //Core one code goes here
     sleep_ms(5000);
     printf("\nCore 1 Started.\n");
+    printf("\nRecieved commands:\n");
 
     while (1) {
-
+        if (cmdi > cmdp) {
+            if ((cmdp % 6) == 0 && cmdp != 0) printf("\n");
+            printf("0x%x, ",cmdarray[cmdp++]);
+            sleep_ms(20);
+        }
 #ifdef DEBUG_ACSI
         while (dasci_q_size == 0) {
         }
@@ -297,6 +312,20 @@ uint8_t acsi_read(uint8_t device,uint block_nr,uint8_t num_blocks,uint8_t contro
 
     return ERROR_OK;
 }
+uint8_t acsi_write(uint8_t device,uint block_nr,uint8_t num_blocks,uint8_t control_byte) {
+    //Get bytes over DMA
+    for (int i=0;i<512;i++) {
+        pio_sm_get_blocking(pio_dma_in, sm_dma_in);
+    }
+    sleep_us(12); // wait for dma to finnish
+
+    //pio_gpio_init(pio_snd_status,ACSI_IRQ);
+    pio_sm_put_blocking(pio_snd_status,sm_snd_status,0); //status ok
+    //sleep_us(10);
+    pio_sm_put_blocking(pio,sm_cmd,1);
+    sleep_us(15);
+    return ERROR_OK;
+}
 
 uint8_t acsi_request_sense(uint8_t device,uint block_nr, uint8_t num_blocks,uint8_t control_byte, uint8_t err) {
     //Change bus direction
@@ -305,7 +334,7 @@ uint8_t acsi_request_sense(uint8_t device,uint block_nr, uint8_t num_blocks,uint
     // Send error code
     pio_sm_put_blocking(pio_dma, sm_dma, err);
     // Send additional 15 bytes.
-    for (int i=1;i<4;i++) {
+    for (int i=1;i<15;i++) {
         pio_sm_put_blocking(pio_dma, sm_dma, 0x00);
     }
     //sleep_us(12); // wait for dma to finnish
@@ -335,7 +364,7 @@ uint8_t acsi_send_inquery() {
     pio_sm_set_consecutive_pindirs(pio_dma,sm_dma,8,8,true);
     // Send Inquery 48 bytes.
     //pio_sm_put_blocking(pio,sm_cmd,1); //send IRQ
-    for (int i=0;i<48;i++) {
+    for (int i=0;i<32;i++) {
          pio_sm_put_blocking(pio_dma, sm_dma, inquery[i]);
     }
     sleep_us(12); // wait for dma to finnish
@@ -375,7 +404,7 @@ int main() {
     printf("Starting Core1 (ACSI handling.)\n \n");
     multicore_launch_core1(core1_entry);
     #endif
-    
+    multicore_launch_core1(core1_entry);
     printf("Setting up PIO.\n");
     
     uint offset_snd_status = pio_add_program(pio_snd_status, &send_status_program);
@@ -411,6 +440,8 @@ int main() {
     if (aid == ACSI_ID) {
         pio_sm_put(pio,0,4); // Five more bytes to read
         data[0]=ad;
+        cmdarray[cmdi++]=ad;
+
     }
     else {
         pio_sm_put(pio,0,0); // Ignore command
@@ -420,6 +451,7 @@ int main() {
 
     for (int i=1;i<6;i++) { 
         data[i]= (uint8_t)pio_sm_get_blocking(pio,0);
+        cmdarray[cmdi++] = data[i];
     }
     block_nr = ((data[1] & 0x1f) << 16) | (data[2] << 8) | data[3];
     device = data[1] >> 5;
@@ -449,6 +481,9 @@ int main() {
         case CMD_INQUERY:
             acsi_send_inquery();
             break;
+        case CMD_WRITE:
+            acsi_write(device,block_nr,num_blocks,control_byte);
+            break;
         default:
             acsi_error = ERROR_INVALID_COMMAND;
             acsi_send_status(CHECK_CONDITION);
@@ -472,9 +507,9 @@ int main() {
     gpio_put(ACSI_D_DIR,1);
     */
     //acsi_dma_out_disable(pio_dma,0);
-    for (int i=0;i<6;i++) {
+    /*for (int i=0;i<6;i++) {
         printf("0x%02x, ",data[i]);
-    }
+    }*/
    
 //    acsi_dma_out_program_init(pio_dma,sm_dma, offset_dma,ACSI_DRQ);
 //    wait_cmd_program_init(pio, sm_cmd, offset_cmd, ACSI_IRQ);
