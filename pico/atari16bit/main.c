@@ -26,8 +26,15 @@
 
 /**
  * Bootsector (for testing)
+ * Sectors to write to.
  */
+
 #include "bootsector.h"
+
+#define NR_TEST_SECTORS 10
+#define SECTOR_SIZE 512
+
+static uint8_t _sectors[NR_TEST_SECTORS * SECTOR_SIZE];
 
 #define LED_PIN 25
 
@@ -118,12 +125,12 @@ bool unit_ready = true; //Unit is aways ready (for now)
 
 PIO pio = pio0;
 PIO pio_dma = pio1;
-PIO pio_snd_status =pio1;
-PIO pio_dma_in = pio1;
+//PIO pio_snd_status =pio1;
+//PIO pio_dma_in = pio1;
 
-uint sm_dma_in = 3;
-uint sm_snd_status = 1;
-uint sm_dma = 1;
+uint sm_dma_in = 2;
+uint sm_snd_status = 0;
+uint sm_dma = 0;
 uint sm_cmd=0;
 
 
@@ -278,7 +285,7 @@ uint8_t acsi_send_status(uint8_t status) {
     gpio_put(ACSI_D_DIR,0);
     pio_sm_set_consecutive_pindirs(pio_dma, sm_dma, 8, 8, true);
     
-    pio_sm_put_blocking(pio_snd_status,sm_snd_status,status); //send status
+    pio_sm_put_blocking(pio_dma,sm_snd_status,status); //send status
     //sleep_us(10);
     pio_sm_put_blocking(pio,sm_cmd,1);
     sleep_us(15);
@@ -303,7 +310,7 @@ uint8_t acsi_read(uint8_t device,uint block_nr,uint8_t num_blocks,uint8_t contro
     sleep_us(12); // wait for dma to finnish
 
     //pio_gpio_init(pio_snd_status,ACSI_IRQ);
-    pio_sm_put_blocking(pio_snd_status,sm_snd_status,0); //status ok
+    pio_sm_put_blocking(pio_dma,sm_snd_status,0); //status ok
     //sleep_us(10);
     pio_sm_put_blocking(pio,sm_cmd,1);
     sleep_us(15);
@@ -314,17 +321,32 @@ uint8_t acsi_read(uint8_t device,uint block_nr,uint8_t num_blocks,uint8_t contro
 }
 uint8_t acsi_write(uint8_t device,uint block_nr,uint8_t num_blocks,uint8_t control_byte) {
     //Get bytes over DMA
-    for (int i=0;i<512;i++) {
-        pio_sm_get_blocking(pio_dma_in, sm_dma_in);
+    uint8_t err = ERROR_OK;
+    if (block_nr > NR_TEST_SECTORS) {
+        err = ERROR_INVALID_ADDRESS;
+        goto send_status;
+    } else if (device != 0) {
+        err = ERROR_INVALID_DEVICE_NUMBER;
+        goto send_status;
+    }
+    for (int i=0;i< 512 * num_blocks;i++) {
+        _sectors[(block_nr * SECTOR_SIZE) + i] = pio_sm_get_blocking(pio_dma, sm_dma_in);
     }
     sleep_us(12); // wait for dma to finnish
-
+    send_status:
     //pio_gpio_init(pio_snd_status,ACSI_IRQ);
-    pio_sm_put_blocking(pio_snd_status,sm_snd_status,0); //status ok
+    gpio_put(ACSI_D_DIR,0);  /* HIGH = INPUT */
+    pio_sm_set_consecutive_pindirs(pio_dma,sm_dma,8,8,true);
+    uint8_t s = ERROR_OK;
+    if (err != 0) s = CHECK_CONDITION;
+
+    pio_sm_put_blocking(pio_dma,sm_snd_status,s); //send status
     //sleep_us(10);
     pio_sm_put_blocking(pio,sm_cmd,1);
     sleep_us(15);
-    return ERROR_OK;
+    pio_sm_set_consecutive_pindirs(pio_dma, sm_dma, 8, 8,false);
+    gpio_put(ACSI_D_DIR,1);
+    return err;
 }
 
 uint8_t acsi_request_sense(uint8_t device,uint block_nr, uint8_t num_blocks,uint8_t control_byte, uint8_t err) {
@@ -340,7 +362,7 @@ uint8_t acsi_request_sense(uint8_t device,uint block_nr, uint8_t num_blocks,uint
     //sleep_us(12); // wait for dma to finnish
 
     //pio_gpio_init(pio_snd_status,ACSI_IRQ);
-    pio_sm_put_blocking(pio_snd_status,sm_snd_status,0); //status ok
+    pio_sm_put_blocking(pio_dma,sm_snd_status,0); //status ok
     //sleep_us(10);
     pio_sm_put_blocking(pio,sm_cmd,1);
     sleep_us(15);
@@ -370,7 +392,7 @@ uint8_t acsi_send_inquery() {
     sleep_us(12); // wait for dma to finnish
 
     //pio_gpio_init(pio_snd_status,ACSI_IRQ);
-    pio_sm_put_blocking(pio_snd_status,sm_snd_status,0); //status ok
+    pio_sm_put_blocking(pio_dma,sm_snd_status,0); //status ok
     //sleep_us(10);
     pio_sm_put_blocking(pio,sm_cmd,1); //send IRQ
     sleep_us(2);
@@ -407,8 +429,8 @@ int main() {
     multicore_launch_core1(core1_entry);
     printf("Setting up PIO.\n");
     
-    uint offset_snd_status = pio_add_program(pio_snd_status, &send_status_program);
-    send_status_program_init(pio_snd_status, sm_snd_status, offset_snd_status, ACSI_IRQ);
+    uint offset_snd_status = pio_add_program(pio_dma, &send_status_program);
+    send_status_program_init(pio_dma, sm_snd_status, offset_snd_status, ACSI_IRQ);
     //Setup ACSI cmd program on pio0
     uint offset_dma = pio_add_program(pio_dma,&acsi_dma_out_program);
     acsi_dma_out_program_init(pio_dma,sm_dma, offset_dma,ACSI_DRQ);
@@ -482,7 +504,7 @@ int main() {
             acsi_send_inquery();
             break;
         case CMD_WRITE:
-            acsi_write(device,block_nr,num_blocks,control_byte);
+            acsi_error = acsi_write(device,block_nr,num_blocks,control_byte);
             break;
         default:
             acsi_error = ERROR_INVALID_COMMAND;
