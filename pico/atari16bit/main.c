@@ -141,9 +141,21 @@ void core1_entry() {
     //Core one code goes here
     sleep_ms(5000);
     printf("\nCore 1 Started.\n");
+    printf("\nSetup UART.\n");
+    //setup UART to esp32
+    uart_init(uart1, 2400);
+    gpio_set_function(4,UART_FUNCSEL_NUM(uart1, 4));
+    gpio_set_function(5, UART_FUNCSEL_NUM(uart1, 5));
+    int __unused accual = uart_set_baudrate(uart1, 2000000);
+    uart_set_hw_flow(uart1, false, false);
+    uart_set_format(uart1, 8, 1, UART_PARITY_NONE);
+    uart_set_fifo_enabled(uart1, true);
     printf("\nRecieved commands:\n");
 
     while (1) {
+        if (uart_is_readable(uart1)) {
+            
+        }
         if (cmdi > cmdp) {
             if ((cmdp % 6) == 0 && cmdp != 0) printf("\n");
             printf("0x%x, ",cmdarray[cmdp++]);
