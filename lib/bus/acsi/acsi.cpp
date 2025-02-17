@@ -34,7 +34,7 @@ uint8_t acsi_get_id(uint8_t b) { return (b >> 5);}
 uint8_t acsi_inquiry() 
 {
     Debug_println("ACSI Inquiry");
-    Debug_printf("%s",_acsi_inquiry);
+    //Debug_printf("%s",_acsi_inquiry);
     return 0;
 }
 /**

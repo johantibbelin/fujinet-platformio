@@ -75,7 +75,7 @@
  * @brief ACSI inquiry string for fujinet
 */
 
-static char _acsi_inquiry[32] ="FujiNet \0";
+//static char _acsi_inquiry[32] ="FujiNet \0";
 
 /* Using SIO device IDs for ACSI (internally) */
 #define ACSI_BAUDRATE 2000000
