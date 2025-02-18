@@ -383,6 +383,7 @@ void ACSIFuji::ACSI_read_device_slots()
 fujiHost *ACSIFuji::set_slot_hostname(int host_slot, char *hostname)
 {
     _fnHosts[host_slot].set_hostname(hostname);
+    _populate_config_from_slots();
     return &_fnHosts[host_slot];
 }
 // Read and save disk slot data from computer
