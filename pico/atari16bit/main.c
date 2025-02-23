@@ -90,7 +90,10 @@ uint8_t dasci_q_size = 0;
 #define CMD_WRITE 0x0a
 #define CMD_SEEK 0x0b
 #define CMD_INQUERY 0x12
+#define CMD_RESERVE 0x16
+#define CMD_RELEASE 0x17
 #define CMD_MODE_SENSE 0x1a
+#define CMD_SEND_DIAGNOSTIC 0x1d
 
 /* ICD extension */
 #define CMD_ICD_EXT 0x1f
@@ -496,6 +499,9 @@ int main() {
     #endif
 
     switch (acmd) {
+        case CMD_RESERVE:
+        case CMD_RELEASE:
+        case CMD_SEND_DIAGNOSTIC:
         case CMD_TEST_UNIT_READY:
             if (unit_ready) {
                 acsi_send_status(ERROR_OK);
