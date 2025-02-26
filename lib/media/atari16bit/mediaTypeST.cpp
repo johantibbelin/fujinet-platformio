@@ -9,7 +9,7 @@
 
 #include "../../include/debug.h"
 
-/* Mediatype ST raw diskimage without heade
+/* Mediatype ST raw diskimage without header
 */
 
 
@@ -129,7 +129,7 @@ bool MediaTypeST::format(uint16_t *responsesize)
 }
 
 /* 
- Mount 8MB RC2014 CP/M "slice"
+ Mount Atari 16-bit images
 */
 mediatype_t MediaTypeST::mount(FILE *f, uint32_t disksize, mediatype_t disk_type)
 {
@@ -148,4 +148,4 @@ bool MediaTypeST::create(FILE *f, uint16_t sectorSize, uint16_t numSectors)
     return true;
 }
 
-#endif /* BUILD_ATARI16BIt */
+#endif /* BUILD_ATARI16BIT */
